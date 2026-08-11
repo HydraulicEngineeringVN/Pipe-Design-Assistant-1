@@ -13,6 +13,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <!-- Lucide Icons CDN -->
 <script src="https://unpkg.com/lucide@latest"></script>
+<!-- Supabase JS Client -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Tailwind CSS -->
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -22,7 +24,14 @@
 <script type="text/babel">
 const { useState, useMemo, useRef, useEffect } = React;
 
-// Helper render Lucide Icon an toàn trên môi trường Web / Vercel
+// Config Supabase
+const SUPABASE_URL = "https://wmzooetuftsfdqonktzg.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_k2pLpEZI2P-6zjsmNp0idA_jKroImfk";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const TRIAL_DAYS = 14; // Số ngày cho dùng thử miễn phí
+
+// Helper render Lucide Icon
 const Icon = ({ name, size = 16, className = "", strokeWidth = 2, fill = "none", fillOpacity = 1 }) => {
   useEffect(() => {
     if (window.lucide) {
@@ -32,7 +41,7 @@ const Icon = ({ name, size = 16, className = "", strokeWidth = 2, fill = "none",
   return <i data-lucide={name} style={{ width: size, height: size }} className={`inline-block ${className}`}></i>;
 };
 
-// Khai báo các Icon dùng trong giao diện
+// Khai báo các Icon
 const Droplet = (props) => <Icon name="droplet" {...props} />;
 const Settings = (props) => <Icon name="settings" {...props} />;
 const Plus = (props) => <Icon name="plus" {...props} />;
@@ -50,12 +59,145 @@ const XCircle = (props) => <Icon name="x-circle" {...props} />;
 const Upload = (props) => <Icon name="upload" {...props} />;
 const RotateCcw = (props) => <Icon name="rotate-ccw" {...props} />;
 const Search = (props) => <Icon name="search" {...props} />;
+const LogOut = (props) => <Icon name="log-out" {...props} />;
+const User = (props) => <Icon name="user" {...props} />;
+const Lock = (props) => <Icon name="lock" {...props} />;
 
 // === DEFAULT_DB_START ===
 const DEFAULT_DB = {"pipeSizes":[{"material":"PPR","dn":"DN15","od":20,"id":14.4},{"material":"PPR","dn":"DN20","od":25,"id":18},{"material":"PPR","dn":"DN25","od":32,"id":23.2},{"material":"PPR","dn":"DN32","od":40,"id":29},{"material":"PPR","dn":"DN40","od":50,"id":36.2},{"material":"PPR","dn":"DN50","od":63,"id":45.8},{"material":"PPR","dn":"DN65","od":75,"id":54.4},{"material":"PPR","dn":"DN80","od":90,"id":65.4},{"material":"PPR","dn":"DN100","od":110,"id":79.8},{"material":"PPR","dn":"DN125","od":125,"id":90.8},{"material":"PPR","dn":"DN150","od":160,"id":116.2},{"material":"PPR","dn":"DN200","od":200,"id":145.2},{"material":"HDPE","dn":"DN20","od":20,"id":16.4},{"material":"HDPE","dn":"DN25","od":25,"id":20.5},{"material":"HDPE","dn":"DN32","od":32,"id":26.2},{"material":"HDPE","dn":"DN40","od":40,"id":32.7},{"material":"HDPE","dn":"DN50","od":50,"id":40.9},{"material":"HDPE","dn":"DN65","od":63,"id":51.5},{"material":"HDPE","dn":"DN80","od":90,"id":73.6},{"material":"HDPE","dn":"DN100","od":110,"id":90},{"material":"HDPE","dn":"DN125","od":140,"id":114.5},{"material":"HDPE","dn":"DN150","od":160,"id":130.9},{"material":"HDPE","dn":"DN200","od":200,"id":163.6},{"material":"Copper","dn":"DN15","od":15.88,"id":13.84},{"material":"Copper","dn":"DN20","od":22.23,"id":19.95},{"material":"Copper","dn":"DN25","od":28.58,"id":26.04},{"material":"Copper","dn":"DN32","od":34.93,"id":32.13},{"material":"Copper","dn":"DN40","od":41.28,"id":38.24},{"material":"Copper","dn":"DN50","od":53.98,"id":50.42},{"material":"Copper","dn":"DN65","od":66.68,"id":62.62},{"material":"Copper","dn":"DN80","od":79.38,"id":74.8},{"material":"Copper","dn":"DN100","od":104.78,"id":99.2},{"material":"Copper","dn":"DN125","od":130.18,"id":123.82},{"material":"Copper","dn":"DN150","od":155.58,"id":148.46},{"material":"Inox","dn":"DN15","od":21.3,"id":17.08},{"material":"Inox","dn":"DN20","od":26.7,"id":22.48},{"material":"Inox","dn":"DN25","od":33.4,"id":27.86},{"material":"Inox","dn":"DN32","od":42.2,"id":36.66},{"material":"Inox","dn":"DN40","od":48.3,"id":42.76},{"material":"Inox","dn":"DN50","od":60.3,"id":54.76},{"material":"Inox","dn":"DN65","od":73,"id":66.9},{"material":"Inox","dn":"DN80","od":88.9,"id":82.8},{"material":"Inox","dn":"DN100","od":114.3,"id":108.2},{"material":"Inox","dn":"DN125","od":141.3,"id":134.5},{"material":"Inox","dn":"DN150","od":168.3,"id":161.5},{"material":"Inox","dn":"DN200","od":219.1,"id":211.58}],"materials":[{"material":"HDPE","c":150,"roughness":0.007},{"material":"PPR","c":150,"roughness":0.006},{"material":"Copper","c":140,"roughness":0.0015},{"material":"Inox","c":120,"roughness":0.045}],"fixtures":[{"standard":"IPC","systemType":null,"name":"WC -Water closet flushing cistern (private)","abbr":"WCprc","fuCold":2.2,"fuHot":0,"fuTotal":2.2},{"standard":"IPC","systemType":null,"name":"WC - Water closet flushing valve (private)","abbr":"WCprv","fuCold":6,"fuHot":0,"fuTotal":5},{"standard":"IPC","systemType":null,"name":"WC - Water closet flushing cistern (public)","abbr":"WCpuc","fuCold":5,"fuHot":0,"fuTotal":5},{"standard":"IPC","systemType":null,"name":"WC - Water closet flushing valve (public)","abbr":"WCpuv","fuCold":10,"fuHot":0,"fuTotal":5},{"standard":"IPC","systemType":null,"name":"UR - Urinal flushing valve (public-25mm)","abbr":"URv25","fuCold":10,"fuHot":0,"fuTotal":5},{"standard":"IPC","systemType":null,"name":"UR - Urinal flushing valve (public-20mm)","abbr":"URv20","fuCold":5,"fuHot":0,"fuTotal":5},{"standard":"IPC","systemType":null,"name":"UR - Urinal flushing tank (public)","abbr":"URc","fuCold":3,"fuHot":0,"fuTotal":3},{"standard":"IPC","systemType":null,"name":"Bd - Bidet (private)","abbr":"Bd","fuCold":1.5,"fuHot":0,"fuTotal":2},{"standard":"IPC","systemType":null,"name":"B - Basin (private)","abbr":"Bpr","fuCold":0.5,"fuHot":0.5,"fuTotal":0.7},{"standard":"IPC","systemType":null,"name":"B - Basin (public)","abbr":"Bpu","fuCold":1.5,"fuHot":1.5,"fuTotal":2},{"standard":"IPC","systemType":null,"name":"Bth - Bath tub (private)","abbr":"BTHpr","fuCold":1,"fuHot":1,"fuTotal":1.4},{"standard":"IPC","systemType":null,"name":"Bth - Bath tub (public)","abbr":"BTHpu","fuCold":3,"fuHot":3,"fuTotal":4},{"standard":"IPC","systemType":null,"name":"Shr - Shower head (private)","abbr":"SHRpr","fuCold":1,"fuHot":1,"fuTotal":1.4},{"standard":"IPC","systemType":null,"name":"Shr - Shower head (public)","abbr":"SHRpu","fuCold":3,"fuHot":3,"fuTotal":4},{"standard":"IPC","systemType":null,"name":"SK - Kitchen sink (private)","abbr":"SKpr","fuCold":1,"fuHot":1,"fuTotal":1.4},{"standard":"IPC","systemType":null,"name":"SK - Kitchen sink (restaurant)","abbr":"KS","fuCold":3,"fuHot":3,"fuTotal":4},{"standard":"IPC","systemType":null,"name":"SK - Service Sink (office)","abbr":"SKof","fuCold":2.25,"fuHot":2.25,"fuTotal":3},{"standard":"IPC","systemType":null,"name":"WM - Clothes-Washing machine (private-8lb)","abbr":"WMpr","fuCold":1,"fuHot":1,"fuTotal":1.4},{"standard":"IPC","systemType":null,"name":"WM - Clothes-Washing machine (public-15lb)","abbr":"WMpu","fuCold":3,"fuHot":3,"fuTotal":4},{"standard":"IPC","systemType":null,"name":"DW - Dishwashing machine  (private)","abbr":"DW","fuCold":1.4,"fuHot":1.4,"fuTotal":1.4},{"standard":"BS EN","systemType":"Medium","name":"WC -Water closet","abbr":"WC","fuCold":2,"fuHot":null,"fuTotal":2},{"standard":"BS EN","systemType":"Medium","name":"UR - Urinal","abbr":"Ur","fuCold":2,"fuHot":null,"fuTotal":2},{"standard":"BS EN","systemType":"Medium","name":"B - Wash Basin DN15/ Tap","abbr":"B","fuCold":2,"fuHot":2,"fuTotal":2},{"standard":"BS EN","systemType":"Medium","name":"Bth - Bath tap DN15","abbr":"Bth","fuCold":8,"fuHot":8,"fuTotal":8},{"standard":"BS EN","systemType":"Medium","name":"Bth - Bath tap DN20","abbr":"Bth","fuCold":11,"fuHot":11,"fuTotal":11},{"standard":"BS EN","systemType":"Medium","name":"Shr - Shower head","abbr":"Shr","fuCold":3,"fuHot":3,"fuTotal":3},{"standard":"BS EN","systemType":"Medium","name":"SK - Sink Tap DN15","abbr":"SK","fuCold":5,"fuHot":5,"fuTotal":5},{"standard":"BS EN","systemType":"Medium","name":"SK - Sink Tap DN20","abbr":"SK","fuCold":7,"fuHot":7,"fuTotal":7},{"standard":"BS EN","systemType":"Medium","name":"WM - Washing machine","abbr":"WM","fuCold":2,"fuHot":2,"fuTotal":2},{"standard":"BS EN","systemType":"Medium","name":"DW - Dishwashing machine  (private)","abbr":"DW","fuCold":2,"fuHot":2,"fuTotal":2},{"standard":"BS EN","systemType":"Small","name":"WC -Water closet","abbr":"WC","fuCold":1,"fuHot":null,"fuTotal":1},{"standard":"BS EN","systemType":"Small","name":"UR - Urinal","abbr":"Ur","fuCold":1,"fuHot":null,"fuTotal":1},{"standard":"BS EN","systemType":"Small","name":"B - Wash Basin DN15/ Tap","abbr":"B","fuCold":1,"fuHot":1,"fuTotal":1},{"standard":"BS EN","systemType":"Small","name":"Bth - Bath tap DN15","abbr":"Bth","fuCold":4,"fuHot":4,"fuTotal":4},{"standard":"BS EN","systemType":"Small","name":"Bth - Bath tap DN20","abbr":"Bth","fuCold":null,"fuHot":null,"fuTotal":null},{"standard":"BS EN","systemType":"Small","name":"Shr - Shower head","abbr":"Shr","fuCold":2,"fuHot":2,"fuTotal":2},{"standard":"BS EN","systemType":"Small","name":"SK - Sink Tap DN15","abbr":"SK","fuCold":2,"fuHot":2,"fuTotal":2},{"standard":"BS EN","systemType":"Small","name":"SK - Sink Tap DN20","abbr":"SK","fuCold":null,"fuHot":null,"fuTotal":null},{"standard":"BS EN","systemType":"Small","name":"WM - Washing machine","abbr":"WM","fuCold":2,"fuHot":2,"fuTotal":2},{"standard":"BS EN","systemType":"Small","name":"DW - Dishwashing machine  (private)","abbr":"DW","fuCold":2,"fuHot":2,"fuTotal":2},{"standard":"BS EN","systemType":"Large","name":"WC -Water closet","abbr":"WC","fuCold":1,"fuHot":null,"fuTotal":5},{"standard":"BS EN","systemType":"Large","name":"UR - Urinal","abbr":"Ur","fuCold":1,"fuHot":null,"fuTotal":5},{"standard":"BS EN","systemType":"Large","name":"B - Wash Basin DN15/ Tap","abbr":"B","fuCold":1,"fuHot":1,"fuTotal":4},{"standard":"BS EN","systemType":"Large","name":"Bth - Bath tap DN15","abbr":"Bth","fuCold":4,"fuHot":4,"fuTotal":16},{"standard":"BS EN","systemType":"Large","name":"Bth - Bath tap DN20","abbr":"Bth","fuCold":null,"fuHot":null,"fuTotal":null},{"standard":"BS EN","systemType":"Large","name":"Shr - Shower head","abbr":"Shr","fuCold":2,"fuHot":2,"fuTotal":6},{"standard":"BS EN","systemType":"Large","name":"SK - Sink Tap DN15","abbr":"SK","fuCold":2,"fuHot":2,"fuTotal":10},{"standard":"BS EN","systemType":"Large","name":"SK - Sink Tap DN20","abbr":"SK","fuCold":null,"fuHot":null,"fuTotal":null},{"standard":"BS EN","systemType":"Large","name":"WM - Washing machine","abbr":"WM","fuCold":2,"fuHot":2,"fuTotal":2},{"standard":"BS EN","systemType":"Large","name":"DW - Dishwashing machine  (private)","abbr":"DW","fuCold":2,"fuHot":2,"fuTotal":2},{"standard":"QCVN","systemType":null,"name":"WC -Water closet flushing cistern (private)","abbr":"WCprc","fuCold":2.5,"fuHot":0,"fuTotal":2.5},{"standard":"QCVN","systemType":null,"name":"WC - Water closet flushing valve (private)","abbr":"WCprv","fuCold":5,"fuHot":0,"fuTotal":5},{"standard":"QCVN","systemType":null,"name":"WC - Water closet flushing cistern (public)","abbr":"WCpuc","fuCold":3,"fuHot":0,"fuTotal":3},{"standard":"QCVN","systemType":null,"name":"WC - Water closet flushing valve (public)","abbr":"WCpuv","fuCold":7,"fuHot":0,"fuTotal":7},{"standard":"QCVN","systemType":null,"name":"UR - Urinal flushing valve (public-25mm)","abbr":"URv25","fuCold":6,"fuHot":0,"fuTotal":6},{"standard":"QCVN","systemType":null,"name":"UR - Urinal flushing valve (public-20mm)","abbr":"URv20","fuCold":5,"fuHot":0,"fuTotal":5},{"standard":"QCVN","systemType":null,"name":"UR - Urinal flushing tank (public)","abbr":"URc","fuCold":4,"fuHot":0,"fuTotal":4},{"standard":"QCVN","systemType":null,"name":"Bd - Bidet (private)","abbr":"Bd","fuCold":1,"fuHot":0,"fuTotal":1},{"standard":"QCVN","systemType":null,"name":"B - Basin (private)","abbr":"Bpr","fuCold":1,"fuHot":1,"fuTotal":1},{"standard":"QCVN","systemType":null,"name":"B - Basin (public)","abbr":"Bpu","fuCold":2,"fuHot":2,"fuTotal":2},{"standard":"QCVN","systemType":null,"name":"Bth - Bath tub (private)","abbr":"BTHpr","fuCold":4,"fuHot":4,"fuTotal":4},{"standard":"QCVN","systemType":null,"name":"Bth - Bath tub (public)","abbr":"BTHpu","fuCold":4,"fuHot":4,"fuTotal":4},{"standard":"QCVN","systemType":null,"name":"Shr - Shower head (private)","abbr":"SHRpr","fuCold":2,"fuHot":2,"fuTotal":2},{"standard":"QCVN","systemType":null,"name":"Shr - Shower head (public)","abbr":"SHRpu","fuCold":5,"fuHot":5,"fuTotal":5},{"standard":"QCVN","systemType":null,"name":"SK - Kitchen sink (private)","abbr":"SKpr","fuCold":1.5,"fuHot":1.5,"fuTotal":1.5},{"standard":"QCVN","systemType":null,"name":"SK - Service Sink (office)","abbr":"SKof","fuCold":1.5,"fuHot":1.5,"fuTotal":1.5},{"standard":"QCVN","systemType":null,"name":"WM - Clothes-Washing machine (private)","abbr":"WMpr","fuCold":4,"fuHot":4,"fuTotal":4},{"standard":"QCVN","systemType":null,"name":"DW - Dishwashing machine  (private)","abbr":"DW","fuCold":1.5,"fuHot":1.5,"fuTotal":1.5},{"standard":"AS NZS","systemType":null,"name":"WC -Water closet flushing cistern","abbr":"WC","fuCold":2,"fuHot":null,"fuTotal":2},{"standard":"AS NZS","systemType":null,"name":"Bth - Bath tub","abbr":"BTH","fuCold":8,"fuHot":4,"fuTotal":8},{"standard":"AS NZS","systemType":null,"name":"B - Basin","abbr":"B","fuCold":1,"fuHot":1,"fuTotal":1},{"standard":"AS NZS","systemType":null,"name":"Spray tap","abbr":"St","fuCold":0.5,"fuHot":0.5,"fuTotal":0.5},{"standard":"AS NZS","systemType":null,"name":"Shr - Shower head","abbr":"SHR","fuCold":2,"fuHot":2,"fuTotal":2},{"standard":"AS NZS","systemType":null,"name":"SK - Sink (standard tap)","abbr":"SK","fuCold":3,"fuHot":3,"fuTotal":3},{"standard":"AS NZS","systemType":null,"name":"SK - Sink (aerator tap)","abbr":"SK","fuCold":2,"fuHot":2,"fuTotal":2},{"standard":"AS NZS","systemType":null,"name":"LT - Laundry trough","abbr":"LT","fuCold":3,"fuHot":3,"fuTotal":3},{"standard":"AS NZS","systemType":null,"name":"WM - Washing Machine/ Dishwasher","abbr":"WM","fuCold":3,"fuHot":2,"fuTotal":3},{"standard":"AS NZS","systemType":null,"name":"WH - Main pressure water heater","abbr":"WH","fuCold":8,"fuHot":null,"fuTotal":8},{"standard":"AS NZS","systemType":null,"name":"HT - Hose tap (DN20)","abbr":"HT","fuCold":8,"fuHot":null,"fuTotal":8},{"standard":"AS NZS","systemType":null,"name":"HT - Hose tap (DN15)","abbr":"HT","fuCold":4,"fuHot":null,"fuTotal":4}],"fu2flow":[{"standard":"IPC","type":"Flush tank","fu":1,"ls":0.189},{"standard":"IPC","type":"Flush tank","fu":2,"ls":0.315},{"standard":"IPC","type":"Flush tank","fu":3,"ls":0.4095},{"standard":"IPC","type":"Flush tank","fu":4,"ls":0.504},{"standard":"IPC","type":"Flush tank","fu":5,"ls":0.5922000000000001},{"standard":"IPC","type":"Flush tank","fu":6,"ls":0.6740999999999999},{"standard":"IPC","type":"Flush tank","fu":7,"ls":0.7434000000000001},{"standard":"IPC","type":"Flush tank","fu":8,"ls":0.8064},{"standard":"IPC","type":"Flush tank","fu":9,"ls":0.8631},{"standard":"IPC","type":"Flush tank","fu":10,"ls":0.9198},{"standard":"IPC","type":"Flush tank","fu":11,"ls":0.9702000000000001},{"standard":"IPC","type":"Flush tank","fu":12,"ls":1.008},{"standard":"IPC","type":"Flush tank","fu":13,"ls":1.0395},{"standard":"IPC","type":"Flush tank","fu":14,"ls":1.071},{"standard":"IPC","type":"Flush tank","fu":15,"ls":1.1025},{"standard":"IPC","type":"Flush tank","fu":16,"ls":1.134},{"standard":"IPC","type":"Flush tank","fu":17,"ls":1.1592},{"standard":"IPC","type":"Flush tank","fu":18,"ls":1.1844000000000001},{"standard":"IPC","type":"Flush tank","fu":19,"ls":1.2096},{"standard":"IPC","type":"Flush tank","fu":20,"ls":1.2348000000000001},{"standard":"IPC","type":"Flush tank","fu":25,"ls":1.3545},{"standard":"IPC","type":"Flush tank","fu":30,"ls":1.4679},{"standard":"IPC","type":"Flush tank","fu":35,"ls":1.5687},{"standard":"IPC","type":"Flush tank","fu":40,"ls":1.6569},{"standard":"IPC","type":"Flush tank","fu":45,"ls":1.7450999999999999},{"standard":"IPC","type":"Flush tank","fu":50,"ls":1.8333000000000002},{"standard":"IPC","type":"Flush tank","fu":60,"ls":2.016},{"standard":"IPC","type":"Flush tank","fu":70,"ls":2.205},{"standard":"IPC","type":"Flush tank","fu":80,"ls":2.394},{"standard":"IPC","type":"Flush tank","fu":90,"ls":2.583},{"standard":"IPC","type":"Flush tank","fu":100,"ls":2.7405},{"standard":"IPC","type":"Flush tank","fu":120,"ls":3.024},{"standard":"IPC","type":"Flush tank","fu":140,"ls":3.3075},{"standard":"IPC","type":"Flush tank","fu":160,"ls":3.591},{"standard":"IPC","type":"Flush tank","fu":180,"ls":3.843},{"standard":"IPC","type":"Flush tank","fu":200,"ls":4.095},{"standard":"IPC","type":"Flush tank","fu":225,"ls":4.41},{"standard":"IPC","type":"Flush tank","fu":250,"ls":4.725},{"standard":"IPC","type":"Flush tank","fu":275,"ls":5.04},{"standard":"IPC","type":"Flush tank","fu":300,"ls":5.355},{"standard":"IPC","type":"Flush tank","fu":400,"ls":6.615},{"standard":"IPC","type":"Flush tank","fu":500,"ls":7.812},{"standard":"IPC","type":"Flush tank","fu":750,"ls":10.71},{"standard":"IPC","type":"Flush tank","fu":1000,"ls":13.104},{"standard":"IPC","type":"Flush tank","fu":1250,"ls":15.057},{"standard":"IPC","type":"Flush tank","fu":1500,"ls":16.947},{"standard":"IPC","type":"Flush tank","fu":1750,"ls":18.711},{"standard":"IPC","type":"Flush tank","fu":2000,"ls":20.475},{"standard":"IPC","type":"Flush tank","fu":2500,"ls":23.94},{"standard":"IPC","type":"Flush tank","fu":3000,"ls":27.279},{"standard":"IPC","type":"Flush tank","fu":4000,"ls":33.705},{"standard":"IPC","type":"Flush tank","fu":5000,"ls":37.359},{"standard":"IPC","type":"Flush valve","fu":5,"ls":0.946},{"standard":"IPC","type":"Flush valve","fu":6,"ls":1.098},{"standard":"IPC","type":"Flush valve","fu":7,"ls":1.249},{"standard":"IPC","type":"Flush valve","fu":8,"ls":1.401},{"standard":"IPC","type":"Flush valve","fu":9,"ls":1.552},{"standard":"IPC","type":"Flush valve","fu":10,"ls":1.703},{"standard":"IPC","type":"Flush valve","fu":11,"ls":1.754},{"standard":"IPC","type":"Flush valve","fu":12,"ls":1.805},{"standard":"IPC","type":"Flush valve","fu":13,"ls":1.855},{"standard":"IPC","type":"Flush valve","fu":14,"ls":1.906},{"standard":"IPC","type":"Flush valve","fu":15,"ls":1.956},{"standard":"IPC","type":"Flush valve","fu":16,"ls":2.007},{"standard":"IPC","type":"Flush valve","fu":17,"ls":2.057},{"standard":"IPC","type":"Flush valve","fu":18,"ls":2.108},{"standard":"IPC","type":"Flush valve","fu":19,"ls":2.158},{"standard":"IPC","type":"Flush valve","fu":20,"ls":2.208},{"standard":"IPC","type":"Flush valve","fu":25,"ls":2.397},{"standard":"IPC","type":"Flush valve","fu":30,"ls":2.65},{"standard":"IPC","type":"Flush valve","fu":35,"ls":2.776},{"standard":"IPC","type":"Flush valve","fu":40,"ls":2.965},{"standard":"IPC","type":"Flush valve","fu":45,"ls":3.092},{"standard":"IPC","type":"Flush valve","fu":50,"ls":3.249},{"standard":"IPC","type":"Flush valve","fu":60,"ls":3.47},{"standard":"IPC","type":"Flush valve","fu":70,"ls":3.722},{"standard":"IPC","type":"Flush valve","fu":80,"ls":3.943},{"standard":"IPC","type":"Flush valve","fu":90,"ls":4.101},{"standard":"IPC","type":"Flush valve","fu":100,"ls":4.29},{"standard":"IPC","type":"Flush valve","fu":120,"ls":4.606},{"standard":"IPC","type":"Flush valve","fu":140,"ls":4.922},{"standard":"IPC","type":"Flush valve","fu":160,"ls":5.237},{"standard":"IPC","type":"Flush valve","fu":180,"ls":5.489},{"standard":"IPC","type":"Flush valve","fu":200,"ls":5.742},{"standard":"IPC","type":"Flush valve","fu":225,"ls":6.025},{"standard":"IPC","type":"Flush valve","fu":250,"ls":6.309},{"standard":"IPC","type":"Flush valve","fu":275,"ls":6.593},{"standard":"IPC","type":"Flush valve","fu":300,"ls":6.814},{"standard":"IPC","type":"Flush valve","fu":400,"ls":8.013},{"standard":"IPC","type":"Flush valve","fu":500,"ls":9.023},{"standard":"IPC","type":"Flush valve","fu":750,"ls":11.168},{"standard":"IPC","type":"Flush valve","fu":1000,"ls":13.124},{"standard":"IPC","type":"Flush valve","fu":1250,"ls":15.079},{"standard":"IPC","type":"Flush valve","fu":1500,"ls":16.973},{"standard":"IPC","type":"Flush valve","fu":1750,"ls":18.74},{"standard":"IPC","type":"Flush valve","fu":2000,"ls":20.507},{"standard":"IPC","type":"Flush valve","fu":2500,"ls":23.974},{"standard":"IPC","type":"Flush valve","fu":3000,"ls":27.319},{"standard":"IPC","type":"Flush valve","fu":4000,"ls":33.125},{"standard":"IPC","type":"Flush valve","fu":5000,"ls":37.413},{"standard":"BS EN","type":"Flush tank","fu":1,"ls":0.1},{"standard":"BS EN","type":"Flush tank","fu":5,"ls":0.2},{"standard":"BS EN","type":"Flush tank","fu":10,"ls":0.3},{"standard":"BS EN","type":"Flush tank","fu":20,"ls":0.44},{"standard":"BS EN","type":"Flush tank","fu":30,"ls":0.56},{"standard":"BS EN","type":"Flush tank","fu":40,"ls":0.7},{"standard":"BS EN","type":"Flush tank","fu":50,"ls":0.77},{"standard":"BS EN","type":"Flush tank","fu":60,"ls":0.9},{"standard":"BS EN","type":"Flush tank","fu":80,"ls":1.06},{"standard":"BS EN","type":"Flush tank","fu":100,"ls":1.25},{"standard":"BS EN","type":"Flush tank","fu":150,"ls":1.68},{"standard":"BS EN","type":"Flush tank","fu":200,"ls":2.1},{"standard":"BS EN","type":"Flush tank","fu":300,"ls":2.8},{"standard":"BS EN","type":"Flush tank","fu":400,"ls":3.53},{"standard":"BS EN","type":"Flush tank","fu":500,"ls":4.1},{"standard":"BS EN","type":"Flush tank","fu":700,"ls":5.25},{"standard":"BS EN","type":"Flush tank","fu":1000,"ls":6.8},{"standard":"BS EN","type":"Flush tank","fu":1500,"ls":9.2},{"standard":"BS EN","type":"Flush tank","fu":2000,"ls":11.2},{"standard":"BS EN","type":"Flush tank","fu":3000,"ls":15.2},{"standard":"BS EN","type":"Flush tank","fu":4000,"ls":18.5},{"standard":"BS EN","type":"Flush tank","fu":5000,"ls":22},{"standard":"BS EN","type":"Flush tank","fu":6000,"ls":25.2},{"standard":"BS EN","type":"Flush tank","fu":7000,"ls":28},{"standard":"BS EN","type":"Flush tank","fu":7700,"ls":30},{"standard":"BS EN","type":"Flush valve","fu":1,"ls":0.15},{"standard":"BS EN","type":"Flush valve","fu":5,"ls":0.2},{"standard":"BS EN","type":"Flush valve","fu":10,"ls":0.3},{"standard":"BS EN","type":"Flush valve","fu":20,"ls":0.44},{"standard":"BS EN","type":"Flush valve","fu":30,"ls":0.56},{"standard":"BS EN","type":"Flush valve","fu":40,"ls":0.7},{"standard":"BS EN","type":"Flush valve","fu":50,"ls":0.77},{"standard":"BS EN","type":"Flush valve","fu":60,"ls":0.9},{"standard":"BS EN","type":"Flush valve","fu":80,"ls":1.06},{"standard":"BS EN","type":"Flush valve","fu":100,"ls":1.25},{"standard":"BS EN","type":"Flush valve","fu":150,"ls":1.68},{"standard":"BS EN","type":"Flush valve","fu":200,"ls":2.1},{"standard":"BS EN","type":"Flush valve","fu":300,"ls":2.8},{"standard":"BS EN","type":"Flush valve","fu":400,"ls":3.53},{"standard":"BS EN","type":"Flush valve","fu":500,"ls":4.1},{"standard":"BS EN","type":"Flush valve","fu":700,"ls":5.25},{"standard":"BS EN","type":"Flush valve","fu":1000,"ls":6.8},{"standard":"BS EN","type":"Flush valve","fu":1500,"ls":9.2},{"standard":"BS EN","type":"Flush valve","fu":2000,"ls":11.2},{"standard":"BS EN","type":"Flush valve","fu":3000,"ls":15.2},{"standard":"BS EN","type":"Flush valve","fu":4000,"ls":18.5},{"standard":"BS EN","type":"Flush valve","fu":5000,"ls":22},{"standard":"BS EN","type":"Flush valve","fu":6000,"ls":25.2},{"standard":"BS EN","type":"Flush valve","fu":7000,"ls":28},{"standard":"BS EN","type":"Flush valve","fu":7700,"ls":30},{"standard":"QCVN","type":"Flush tank","fu":1,"ls":0.189},{"standard":"QCVN","type":"Flush tank","fu":2,"ls":0.315},{"standard":"QCVN","type":"Flush tank","fu":3,"ls":0.4095},{"standard":"QCVN","type":"Flush tank","fu":4,"ls":0.504},{"standard":"QCVN","type":"Flush tank","fu":5,"ls":0.5922000000000001},{"standard":"QCVN","type":"Flush tank","fu":6,"ls":0.6740999999999999},{"standard":"QCVN","type":"Flush tank","fu":7,"ls":0.7434000000000001},{"standard":"QCVN","type":"Flush tank","fu":8,"ls":0.8064},{"standard":"QCVN","type":"Flush tank","fu":9,"ls":0.8631},{"standard":"QCVN","type":"Flush tank","fu":10,"ls":0.9198},{"standard":"QCVN","type":"Flush tank","fu":11,"ls":0.9702000000000001},{"standard":"QCVN","type":"Flush tank","fu":12,"ls":1.008},{"standard":"QCVN","type":"Flush tank","fu":13,"ls":1.0395},{"standard":"QCVN","type":"Flush tank","fu":14,"ls":1.071},{"standard":"QCVN","type":"Flush tank","fu":15,"ls":1.1025},{"standard":"QCVN","type":"Flush tank","fu":16,"ls":1.134},{"standard":"QCVN","type":"Flush tank","fu":17,"ls":1.1592},{"standard":"QCVN","type":"Flush tank","fu":18,"ls":1.1844000000000001},{"standard":"QCVN","type":"Flush tank","fu":19,"ls":1.2096},{"standard":"QCVN","type":"Flush tank","fu":20,"ls":1.2348000000000001},{"standard":"QCVN","type":"Flush tank","fu":25,"ls":1.3545},{"standard":"QCVN","type":"Flush tank","fu":30,"ls":1.4679},{"standard":"QCVN","type":"Flush tank","fu":35,"ls":1.5687},{"standard":"QCVN","type":"Flush tank","fu":40,"ls":1.6569},{"standard":"QCVN","type":"Flush tank","fu":45,"ls":1.7450999999999999},{"standard":"QCVN","type":"Flush tank","fu":50,"ls":1.8333000000000002},{"standard":"QCVN","type":"Flush tank","fu":60,"ls":2.016},{"standard":"QCVN","type":"Flush tank","fu":70,"ls":2.205},{"standard":"QCVN","type":"Flush tank","fu":80,"ls":2.394},{"standard":"QCVN","type":"Flush tank","fu":90,"ls":2.583},{"standard":"QCVN","type":"Flush tank","fu":100,"ls":2.7405},{"standard":"QCVN","type":"Flush tank","fu":120,"ls":3.024},{"standard":"QCVN","type":"Flush tank","fu":140,"ls":3.3075},{"standard":"QCVN","type":"Flush tank","fu":160,"ls":3.591},{"standard":"QCVN","type":"Flush tank","fu":180,"ls":3.843},{"standard":"QCVN","type":"Flush tank","fu":200,"ls":4.095},{"standard":"QCVN","type":"Flush tank","fu":225,"ls":4.41},{"standard":"QCVN","type":"Flush tank","fu":250,"ls":4.725},{"standard":"QCVN","type":"Flush tank","fu":275,"ls":5.04},{"standard":"QCVN","type":"Flush tank","fu":300,"ls":5.355},{"standard":"QCVN","type":"Flush tank","fu":400,"ls":6.615},{"standard":"QCVN","type":"Flush tank","fu":500,"ls":7.812},{"standard":"QCVN","type":"Flush tank","fu":750,"ls":10.71},{"standard":"QCVN","type":"Flush tank","fu":1000,"ls":13.104},{"standard":"QCVN","type":"Flush tank","fu":1250,"ls":15.057},{"standard":"QCVN","type":"Flush tank","fu":1500,"ls":16.947},{"standard":"QCVN","type":"Flush tank","fu":1750,"ls":18.711},{"standard":"QCVN","type":"Flush tank","fu":2000,"ls":20.475},{"standard":"QCVN","type":"Flush tank","fu":2500,"ls":23.94},{"standard":"QCVN","type":"Flush tank","fu":3000,"ls":27.279},{"standard":"QCVN","type":"Flush tank","fu":4000,"ls":33.705},{"standard":"QCVN","type":"Flush tank","fu":5000,"ls":37.359},{"standard":"QCVN","type":"Flush valve","fu":5,"ls":0.946},{"standard":"QCVN","type":"Flush valve","fu":6,"ls":1.098},{"standard":"QCVN","type":"Flush valve","fu":7,"ls":1.249},{"standard":"QCVN","type":"Flush valve","fu":8,"ls":1.401},{"standard":"QCVN","type":"Flush valve","fu":9,"ls":1.552},{"standard":"QCVN","type":"Flush valve","fu":10,"ls":1.703},{"standard":"QCVN","type":"Flush valve","fu":11,"ls":1.754},{"standard":"QCVN","type":"Flush valve","fu":12,"ls":1.805},{"standard":"QCVN","type":"Flush valve","fu":13,"ls":1.855},{"standard":"QCVN","type":"Flush valve","fu":14,"ls":1.906},{"standard":"QCVN","type":"Flush valve","fu":15,"ls":1.956},{"standard":"QCVN","type":"Flush valve","fu":16,"ls":2.007},{"standard":"QCVN","type":"Flush valve","fu":17,"ls":2.057},{"standard":"QCVN","type":"Flush valve","fu":18,"ls":2.108},{"standard":"QCVN","type":"Flush valve","fu":19,"ls":2.158},{"standard":"QCVN","type":"Flush valve","fu":20,"ls":2.208},{"standard":"QCVN","type":"Flush valve","fu":25,"ls":2.397},{"standard":"QCVN","type":"Flush valve","fu":30,"ls":2.65},{"standard":"QCVN","type":"Flush valve","fu":35,"ls":2.776},{"standard":"QCVN","type":"Flush valve","fu":40,"ls":2.965},{"standard":"QCVN","type":"Flush valve","fu":45,"ls":3.092},{"standard":"QCVN","type":"Flush valve","fu":50,"ls":3.249},{"standard":"QCVN","type":"Flush valve","fu":60,"ls":3.47},{"standard":"QCVN","type":"Flush valve","fu":70,"ls":3.722},{"standard":"QCVN","type":"Flush valve","fu":80,"ls":3.943},{"standard":"QCVN","type":"Flush valve","fu":90,"ls":4.101},{"standard":"QCVN","type":"Flush valve","fu":100,"ls":4.29},{"standard":"QCVN","type":"Flush valve","fu":120,"ls":4.606},{"standard":"QCVN","type":"Flush valve","fu":140,"ls":4.922},{"standard":"QCVN","type":"Flush valve","fu":160,"ls":5.237},{"standard":"QCVN","type":"Flush valve","fu":180,"ls":5.489},{"standard":"QCVN","type":"Flush valve","fu":200,"ls":5.742},{"standard":"QCVN","type":"Flush valve","fu":225,"ls":6.025},{"standard":"QCVN","type":"Flush valve","fu":250,"ls":6.309},{"standard":"QCVN","type":"Flush valve","fu":275,"ls":6.593},{"standard":"QCVN","type":"Flush valve","fu":300,"ls":6.814},{"standard":"QCVN","type":"Flush valve","fu":400,"ls":8.013},{"standard":"QCVN","type":"Flush valve","fu":500,"ls":9.023},{"standard":"QCVN","type":"Flush valve","fu":750,"ls":11.168},{"standard":"QCVN","type":"Flush valve","fu":1000,"ls":13.124},{"standard":"QCVN","type":"Flush valve","fu":1250,"ls":15.079},{"standard":"QCVN","type":"Flush valve","fu":1500,"ls":16.973},{"standard":"QCVN","type":"Flush valve","fu":1750,"ls":18.74},{"standard":"QCVN","type":"Flush valve","fu":2000,"ls":20.507},{"standard":"QCVN","type":"Flush valve","fu":2500,"ls":23.974},{"standard":"QCVN","type":"Flush valve","fu":3000,"ls":27.319},{"standard":"QCVN","type":"Flush valve","fu":4000,"ls":33.125},{"standard":"QCVN","type":"Flush valve","fu":5000,"ls":37.413},{"standard":"AS NZS","type":"Flush tank","fu":1,"ls":0.09},{"standard":"AS NZS","type":"Flush tank","fu":2,"ls":0.12},{"standard":"AS NZS","type":"Flush tank","fu":3,"ls":0.14},{"standard":"AS NZS","type":"Flush tank","fu":4,"ls":0.16},{"standard":"AS NZS","type":"Flush tank","fu":5,"ls":0.18},{"standard":"AS NZS","type":"Flush tank","fu":6,"ls":0.2},{"standard":"AS NZS","type":"Flush tank","fu":7,"ls":0.22},{"standard":"AS NZS","type":"Flush tank","fu":8,"ls":0.24},{"standard":"AS NZS","type":"Flush tank","fu":9,"ls":0.25},{"standard":"AS NZS","type":"Flush tank","fu":10,"ls":0.26},{"standard":"AS NZS","type":"Flush tank","fu":11,"ls":0.28},{"standard":"AS NZS","type":"Flush tank","fu":12,"ls":0.29},{"standard":"AS NZS","type":"Flush tank","fu":13,"ls":0.3},{"standard":"AS NZS","type":"Flush tank","fu":14,"ls":0.31},{"standard":"AS NZS","type":"Flush tank","fu":15,"ls":0.33},{"standard":"AS NZS","type":"Flush tank","fu":16,"ls":0.34},{"standard":"AS NZS","type":"Flush tank","fu":17,"ls":0.35},{"standard":"AS NZS","type":"Flush tank","fu":18,"ls":0.36},{"standard":"AS NZS","type":"Flush tank","fu":19,"ls":0.37},{"standard":"AS NZS","type":"Flush tank","fu":20,"ls":0.38},{"standard":"AS NZS","type":"Flush tank","fu":21,"ls":0.39},{"standard":"AS NZS","type":"Flush tank","fu":22,"ls":0.4},{"standard":"AS NZS","type":"Flush tank","fu":23,"ls":0.41},{"standard":"AS NZS","type":"Flush tank","fu":24,"ls":0.42},{"standard":"AS NZS","type":"Flush tank","fu":25,"ls":0.43},{"standard":"AS NZS","type":"Flush tank","fu":26,"ls":0.43},{"standard":"AS NZS","type":"Flush tank","fu":27,"ls":0.44},{"standard":"AS NZS","type":"Flush tank","fu":28,"ls":0.45},{"standard":"AS NZS","type":"Flush tank","fu":29,"ls":0.46},{"standard":"AS NZS","type":"Flush tank","fu":30,"ls":0.47},{"standard":"AS NZS","type":"Flush tank","fu":31,"ls":0.48},{"standard":"AS NZS","type":"Flush tank","fu":32,"ls":0.49},{"standard":"AS NZS","type":"Flush tank","fu":33,"ls":0.49},{"standard":"AS NZS","type":"Flush tank","fu":34,"ls":0.5},{"standard":"AS NZS","type":"Flush tank","fu":35,"ls":0.51},{"standard":"AS NZS","type":"Flush tank","fu":36,"ls":0.52},{"standard":"AS NZS","type":"Flush tank","fu":37,"ls":0.52},{"standard":"AS NZS","type":"Flush tank","fu":38,"ls":0.53},{"standard":"AS NZS","type":"Flush tank","fu":39,"ls":0.54},{"standard":"AS NZS","type":"Flush tank","fu":40,"ls":0.55},{"standard":"AS NZS","type":"Flush tank","fu":41,"ls":0.55},{"standard":"AS NZS","type":"Flush tank","fu":42,"ls":0.56},{"standard":"AS NZS","type":"Flush tank","fu":43,"ls":0.57},{"standard":"AS NZS","type":"Flush tank","fu":44,"ls":0.58},{"standard":"AS NZS","type":"Flush tank","fu":45,"ls":0.58},{"standard":"AS NZS","type":"Flush tank","fu":46,"ls":0.59},{"standard":"AS NZS","type":"Flush tank","fu":47,"ls":0.6},{"standard":"AS NZS","type":"Flush tank","fu":48,"ls":0.6},{"standard":"AS NZS","type":"Flush tank","fu":49,"ls":0.61},{"standard":"AS NZS","type":"Flush tank","fu":50,"ls":0.62},{"standard":"AS NZS","type":"Flush tank","fu":51,"ls":0.62},{"standard":"AS NZS","type":"Flush tank","fu":52,"ls":0.63},{"standard":"AS NZS","type":"Flush tank","fu":53,"ls":0.64},{"standard":"AS NZS","type":"Flush tank","fu":54,"ls":0.64},{"standard":"AS NZS","type":"Flush tank","fu":55,"ls":0.65},{"standard":"AS NZS","type":"Flush tank","fu":56,"ls":0.65},{"standard":"AS NZS","type":"Flush tank","fu":57,"ls":0.66},{"standard":"AS NZS","type":"Flush tank","fu":58,"ls":0.67},{"standard":"AS NZS","type":"Flush tank","fu":59,"ls":0.67},{"standard":"AS NZS","type":"Flush tank","fu":60,"ls":0.68},{"standard":"AS NZS","type":"Flush tank","fu":100,"ls":1.2},{"standard":"AS NZS","type":"Flush tank","fu":150,"ls":1.35},{"standard":"AS NZS","type":"Flush tank","fu":200,"ls":1.45},{"standard":"AS NZS","type":"Flush tank","fu":250,"ls":1.6},{"standard":"AS NZS","type":"Flush tank","fu":300,"ls":1.7},{"standard":"AS NZS","type":"Flush tank","fu":350,"ls":1.85},{"standard":"AS NZS","type":"Flush tank","fu":400,"ls":2},{"standard":"AS NZS","type":"Flush tank","fu":450,"ls":2.15},{"standard":"AS NZS","type":"Flush tank","fu":500,"ls":2.35},{"standard":"AS NZS","type":"Flush tank","fu":550,"ls":2.5},{"standard":"AS NZS","type":"Flush tank","fu":600,"ls":2.6},{"standard":"AS NZS","type":"Flush tank","fu":650,"ls":2.75},{"standard":"AS NZS","type":"Flush tank","fu":700,"ls":2.85},{"standard":"AS NZS","type":"Flush tank","fu":750,"ls":2.95},{"standard":"AS NZS","type":"Flush tank","fu":800,"ls":3.05},{"standard":"AS NZS","type":"Flush tank","fu":850,"ls":3.2},{"standard":"AS NZS","type":"Flush tank","fu":900,"ls":3.3},{"standard":"AS NZS","type":"Flush tank","fu":1000,"ls":3.5},{"standard":"AS NZS","type":"Flush tank","fu":1200,"ls":3.8},{"standard":"AS NZS","type":"Flush tank","fu":1400,"ls":4.2},{"standard":"AS NZS","type":"Flush tank","fu":1600,"ls":4.6},{"standard":"AS NZS","type":"Flush tank","fu":1800,"ls":4.9},{"standard":"AS NZS","type":"Flush tank","fu":2000,"ls":5.25},{"standard":"AS NZS","type":"Flush tank","fu":2200,"ls":5.5},{"standard":"AS NZS","type":"Flush tank","fu":2400,"ls":5.75},{"standard":"AS NZS","type":"Flush tank","fu":2600,"ls":6},{"standard":"AS NZS","type":"Flush tank","fu":2800,"ls":6.35},{"standard":"AS NZS","type":"Flush tank","fu":3000,"ls":6.7},{"standard":"AS NZS","type":"Flush tank","fu":3500,"ls":7.25},{"standard":"AS NZS","type":"Flush tank","fu":4000,"ls":7.75},{"standard":"AS NZS","type":"Flush tank","fu":4500,"ls":8.4},{"standard":"AS NZS","type":"Flush tank","fu":5000,"ls":9},{"standard":"AS NZS","type":"Flush valve","fu":1,"ls":0.09},{"standard":"AS NZS","type":"Flush valve","fu":2,"ls":0.12},{"standard":"AS NZS","type":"Flush valve","fu":3,"ls":0.14},{"standard":"AS NZS","type":"Flush valve","fu":4,"ls":0.16},{"standard":"AS NZS","type":"Flush valve","fu":5,"ls":0.18},{"standard":"AS NZS","type":"Flush valve","fu":6,"ls":0.2},{"standard":"AS NZS","type":"Flush valve","fu":7,"ls":0.22},{"standard":"AS NZS","type":"Flush valve","fu":8,"ls":0.24},{"standard":"AS NZS","type":"Flush valve","fu":9,"ls":0.25},{"standard":"AS NZS","type":"Flush valve","fu":10,"ls":0.26},{"standard":"AS NZS","type":"Flush valve","fu":11,"ls":0.28},{"standard":"AS NZS","type":"Flush valve","fu":12,"ls":0.29},{"standard":"AS NZS","type":"Flush valve","fu":13,"ls":0.3},{"standard":"AS NZS","type":"Flush valve","fu":14,"ls":0.31},{"standard":"AS NZS","type":"Flush valve","fu":15,"ls":0.33},{"standard":"AS NZS","type":"Flush valve","fu":16,"ls":0.34},{"standard":"AS NZS","type":"Flush valve","fu":17,"ls":0.35},{"standard":"AS NZS","type":"Flush valve","fu":18,"ls":0.36},{"standard":"AS NZS","type":"Flush valve","fu":19,"ls":0.37},{"standard":"AS NZS","type":"Flush valve","fu":20,"ls":0.38},{"standard":"AS NZS","type":"Flush valve","fu":21,"ls":0.39},{"standard":"AS NZS","type":"Flush valve","fu":22,"ls":0.4},{"standard":"AS NZS","type":"Flush valve","fu":23,"ls":0.41},{"standard":"AS NZS","type":"Flush valve","fu":24,"ls":0.42},{"standard":"AS NZS","type":"Flush valve","fu":25,"ls":0.43},{"standard":"AS NZS","type":"Flush valve","fu":26,"ls":0.43},{"standard":"AS NZS","type":"Flush valve","fu":27,"ls":0.44},{"standard":"AS NZS","type":"Flush valve","fu":28,"ls":0.45},{"standard":"AS NZS","type":"Flush valve","fu":29,"ls":0.46},{"standard":"AS NZS","type":"Flush valve","fu":30,"ls":0.47},{"standard":"AS NZS","type":"Flush valve","fu":31,"ls":0.48},{"standard":"AS NZS","type":"Flush valve","fu":32,"ls":0.49},{"standard":"AS NZS","type":"Flush valve","fu":33,"ls":0.49},{"standard":"AS NZS","type":"Flush valve","fu":34,"ls":0.5},{"standard":"AS NZS","type":"Flush valve","fu":35,"ls":0.51},{"standard":"AS NZS","type":"Flush valve","fu":36,"ls":0.52},{"standard":"AS NZS","type":"Flush valve","fu":37,"ls":0.52},{"standard":"AS NZS","type":"Flush valve","fu":38,"ls":0.53},{"standard":"AS NZS","type":"Flush valve","fu":39,"ls":0.54},{"standard":"AS NZS","type":"Flush valve","fu":40,"ls":0.55},{"standard":"AS NZS","type":"Flush valve","fu":41,"ls":0.55},{"standard":"AS NZS","type":"Flush valve","fu":42,"ls":0.56},{"standard":"AS NZS","type":"Flush valve","fu":43,"ls":0.57},{"standard":"AS NZS","type":"Flush valve","fu":44,"ls":0.58},{"standard":"AS NZS","type":"Flush valve","fu":45,"ls":0.58},{"standard":"AS NZS","type":"Flush valve","fu":46,"ls":0.59},{"standard":"AS NZS","type":"Flush valve","fu":47,"ls":0.6},{"standard":"AS NZS","type":"Flush valve","fu":48,"ls":0.6},{"standard":"AS NZS","type":"Flush valve","fu":49,"ls":0.61},{"standard":"AS NZS","type":"Flush valve","fu":50,"ls":0.62},{"standard":"AS NZS","type":"Flush valve","fu":51,"ls":0.62},{"standard":"AS NZS","type":"Flush valve","fu":52,"ls":0.63},{"standard":"AS NZS","type":"Flush valve","fu":53,"ls":0.64},{"standard":"AS NZS","type":"Flush valve","fu":54,"ls":0.64},{"standard":"AS NZS","type":"Flush valve","fu":55,"ls":0.65},{"standard":"AS NZS","type":"Flush valve","fu":56,"ls":0.65},{"standard":"AS NZS","type":"Flush valve","fu":57,"ls":0.66},{"standard":"AS NZS","type":"Flush valve","fu":58,"ls":0.67},{"standard":"AS NZS","type":"Flush valve","fu":59,"ls":0.67},{"standard":"AS NZS","type":"Flush valve","fu":60,"ls":0.68},{"standard":"AS NZS","type":"Flush valve","fu":100,"ls":1.2},{"standard":"AS NZS","type":"Flush valve","fu":150,"ls":1.35},{"standard":"AS NZS","type":"Flush valve","fu":200,"ls":1.45},{"standard":"AS NZS","type":"Flush valve","fu":250,"ls":1.6},{"standard":"AS NZS","type":"Flush valve","fu":300,"ls":1.7},{"standard":"AS NZS","type":"Flush valve","fu":350,"ls":1.85},{"standard":"AS NZS","type":"Flush valve","fu":400,"ls":2},{"standard":"AS NZS","type":"Flush valve","fu":450,"ls":2.15},{"standard":"AS NZS","type":"Flush valve","fu":500,"ls":2.35},{"standard":"AS NZS","type":"Flush valve","fu":550,"ls":2.5},{"standard":"AS NZS","type":"Flush valve","fu":600,"ls":2.6},{"standard":"AS NZS","type":"Flush valve","fu":650,"ls":2.75},{"standard":"AS NZS","type":"Flush valve","fu":700,"ls":2.85},{"standard":"AS NZS","type":"Flush valve","fu":750,"ls":2.95},{"standard":"AS NZS","type":"Flush valve","fu":800,"ls":3.05},{"standard":"AS NZS","type":"Flush valve","fu":850,"ls":3.2},{"standard":"AS NZS","type":"Flush valve","fu":900,"ls":3.3},{"standard":"AS NZS","type":"Flush valve","fu":1000,"ls":3.5},{"standard":"AS NZS","type":"Flush valve","fu":1200,"ls":3.8},{"standard":"AS NZS","type":"Flush valve","fu":1400,"ls":4.2},{"standard":"AS NZS","type":"Flush valve","fu":1600,"ls":4.6},{"standard":"AS NZS","type":"Flush valve","fu":1800,"ls":4.9},{"standard":"AS NZS","type":"Flush valve","fu":2000,"ls":5.25},{"standard":"AS NZS","type":"Flush valve","fu":2200,"ls":5.5},{"standard":"AS NZS","type":"Flush valve","fu":2400,"ls":5.75},{"standard":"AS NZS","type":"Flush valve","fu":2600,"ls":6},{"standard":"AS NZS","type":"Flush valve","fu":2800,"ls":6.35},{"standard":"AS NZS","type":"Flush valve","fu":3000,"ls":6.7},{"standard":"AS NZS","type":"Flush valve","fu":3500,"ls":7.25},{"standard":"AS NZS","type":"Flush valve","fu":4000,"ls":7.75},{"standard":"AS NZS","type":"Flush valve","fu":4500,"ls":8.4},{"standard":"AS NZS","type":"Flush valve","fu":5000,"ls":9}],"velocity":[{"standard":"IPC","building":"Residential","system":"CW","recommended":1.5,"maximum":2},{"standard":"IPC","building":"Hotel","system":"CW","recommended":1.5,"maximum":2},{"standard":"IPC","building":"Hospital","system":"CW","recommended":1.5,"maximum":2},{"standard":"BS EN","building":"Residential","system":"CW","recommended":1.5,"maximum":2},{"standard":"BS EN","building":"Hotel","system":"CW","recommended":1.5,"maximum":2},{"standard":"BS EN","building":"Hospital","system":"CW","recommended":1.5,"maximum":2},{"standard":"QCVN","building":"Residential","system":"CW","recommended":1.5,"maximum":2},{"standard":"QCVN","building":"Hotel","system":"CW","recommended":1.5,"maximum":2},{"standard":"QCVN","building":"Hospital","system":"CW","recommended":1.5,"maximum":2},{"standard":"AS NZS","building":"Residential","system":"CW","recommended":1.5,"maximum":2},{"standard":"AS NZS","building":"Hotel","system":"CW","recommended":1.5,"maximum":2},{"standard":"AS NZS","building":"Hospital","system":"CW","recommended":1.5,"maximum":2}]};
 // === DEFAULT_DB_END ===
 
-/* ============================ helpers ============================ */
+/* ============================ Auth Form Component ============================ */
+
+function AuthForm({ onLoginSuccess }) {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [infoMsg, setInfoMsg] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg("");
+    setInfoMsg("");
+
+    try {
+      if (isSignUp) {
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        setInfoMsg("Đăng ký thành công! Hãy kiểm tra Email để xác nhận hoặc Đăng nhập ngay.");
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        onLoginSuccess(data.user);
+      }
+    } catch (err) {
+      setErrorMsg(err.message || "Đã xảy ra lỗi, vui lòng thử lại!");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-[#EDE6D6] p-8 max-w-md w-full">
+        <div className="flex flex-col items-center mb-6 text-center">
+          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#4FB3A6] to-[#1F7A70] flex items-center justify-center mb-3">
+            <Droplet size={24} className="text-white" fill="white" fillOpacity={0.25} />
+          </div>
+          <h2 className="text-xl font-bold text-[#1F3B36]">Pipe Design Assistant</h2>
+          <p className="text-xs text-[#7D8B87] mt-1">Đăng nhập tài khoản để sử dụng công cụ (Dùng thử miễn phí {TRIAL_DAYS} ngày)</p>
+        </div>
+
+        {errorMsg && (
+          <div className="mb-4 text-xs text-[#C13A3A] bg-[#FBE7E7] rounded-xl p-3 border border-[#C13A3A]/20">
+            {errorMsg}
+          </div>
+        )}
+        {infoMsg && (
+          <div className="mb-4 text-xs text-[#1E8A50] bg-[#E4F6EC] rounded-xl p-3 border border-[#1E8A50]/20">
+            {infoMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-[#7D8B87] mb-1">Email của bạn</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@company.com"
+              className="w-full bg-[#FAF7EF] border border-[#E7E0CE] rounded-xl px-3.5 py-2.5 text-sm text-[#243B36] focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/40"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#7D8B87] mb-1">Mật khẩu</label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full bg-[#FAF7EF] border border-[#E7E0CE] rounded-xl px-3.5 py-2.5 text-sm text-[#243B36] focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/40"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full mt-2 flex items-center justify-center gap-2 rounded-2xl py-3 font-semibold text-white text-sm bg-gradient-to-r from-[#4FB3A6] to-[#1F7A70] hover:brightness-105 transition shadow-md disabled:opacity-50"
+          >
+            {loading ? "Đang xử lý..." : isSignUp ? "Tạo tài khoản dùng thử" : "Đăng nhập"}
+          </button>
+        </form>
+
+        <div className="mt-6 text-center text-xs text-[#7D8B87]">
+          {isSignUp ? "Đã có tài khoản?" : "Chưa có tài khoản?"}{" "}
+          <button
+            onClick={() => { setIsSignUp(!isSignUp); setErrorMsg(""); setInfoMsg(""); }}
+            className="font-semibold text-[#1F7A70] hover:underline"
+          >
+            {isSignUp ? "Đăng nhập ngay" : "Đăng ký dùng thử miễn phí"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ Expired Trial Screen ============================ */
+
+function ExpiredTrialScreen({ user, onLogout }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-[#EDE6D6] p-8 max-w-md w-full text-center">
+        <div className="w-12 h-12 rounded-full bg-[#FEF3DE] flex items-center justify-center mx-auto mb-4 text-[#B8791A]">
+          <Lock size={24} />
+        </div>
+        <h2 className="text-xl font-bold text-[#1F3B36]">Đã hết thời gian dùng thử!</h2>
+        <p className="text-xs text-[#7D8B87] mt-2 leading-relaxed">
+          Tài khoản <strong className="text-[#243B36]">{user.email}</strong> của bạn đã hết thời hạn {TRIAL_DAYS} ngày dùng thử miễn phí.
+        </p>
+        <div className="my-6 p-4 bg-[#FAF7EF] rounded-2xl border border-[#E7E0CE] text-left">
+          <p className="text-xs text-[#243B36] font-medium mb-1">Để nâng cấp bản quyền Pro:</p>
+          <p className="text-xs text-[#7D8B87]">Vui lòng liên hệ Admin qua Email hoặc Zalo để kích hoạt tài khoản vĩnh viễn.</p>
+        </div>
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center justify-center gap-2 rounded-2xl py-2.5 font-medium text-[#7D8B87] border border-[#E7E0CE] hover:bg-[#FAF7EF] transition text-sm"
+        >
+          <LogOut size={15} /> Đăng xuất
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ Helpers, UI Atoms, Modules (Giữ nguyên) ============================ */
 
 function interpolate(table, standard, type, totalFU) {
   const rows = table
@@ -82,241 +224,96 @@ function getFuRange(table, standard, type) {
   return { min: Math.min(...fus), max: Math.max(...fus) };
 }
 
-function crossSectionArea(idMm) {
-  const r = idMm / 2 / 1000;
-  return Math.PI * r * r;
-}
-
-function velocityMs(flowLs, idMm) {
-  const flowM3s = flowLs / 1000;
-  const area = crossSectionArea(idMm);
-  return flowM3s / area;
-}
-
+function crossSectionArea(idMm) { return Math.PI * Math.pow(idMm / 2 / 1000, 2); }
+function velocityMs(flowLs, idMm) { return (flowLs / 1000) / crossSectionArea(idMm); }
 function headLossHW(flowLs, idMm, C, lengthM = 100) {
-  const Q = flowLs / 1000;
-  const D = idMm / 1000;
-  const hf = (10.67 * lengthM * Math.pow(Q, 1.852)) / (Math.pow(C, 1.852) * Math.pow(D, 4.8704));
-  return hf;
+  return (10.67 * lengthM * Math.pow(flowLs / 1000, 1.852)) / (Math.pow(C, 1.852) * Math.pow(idMm / 1000, 4.8704));
 }
-
-function pressureLossKPa(headLossM) {
-  return headLossM * 9.81;
-}
-
-function fmt(n, d = 2) {
-  if (n === null || n === undefined || isNaN(n)) return "-";
-  return Number(n).toFixed(d);
-}
-
-/* ============================ UI atoms ============================ */
+function pressureLossKPa(headLossM) { return headLossM * 9.81; }
+function fmt(n, d = 2) { return (n === null || n === undefined || isNaN(n)) ? "-" : Number(n).toFixed(d); }
 
 function Card({ children, className = "" }) {
-  return (
-    <div className={`bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-[#EDE6D6] p-6 ${className}`}>
-      {children}
-    </div>
-  );
+  return <div className={`bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-[#EDE6D6] p-6 ${className}`}>{children}</div>;
 }
-
 function SectionTitle({ icon: IconComponent, children }) {
   return (
     <div className="flex items-center gap-2 mb-4">
-      <div className="w-8 h-8 rounded-full bg-[#E9F4F2] flex items-center justify-center text-[#1F7A70]">
-        <IconComponent size={16} strokeWidth={2.5} />
-      </div>
+      <div className="w-8 h-8 rounded-full bg-[#E9F4F2] flex items-center justify-center text-[#1F7A70]"><IconComponent size={16} strokeWidth={2.5} /></div>
       <h3 className="font-semibold text-[#243B36] text-[15px] tracking-tight">{children}</h3>
     </div>
   );
 }
-
 function Field({ label, children }) {
-  return (
-    <div className="mb-4 last:mb-0">
-      <label className="block text-xs font-medium text-[#7D8B87] mb-1.5">{label}</label>
-      {children}
-    </div>
-  );
+  return <div className="mb-4 last:mb-0"><label className="block text-xs font-medium text-[#7D8B87] mb-1.5">{label}</label>{children}</div>;
 }
-
 function Select({ value, onChange, options }) {
   return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      className="w-full bg-[#FAF7EF] border border-[#E7E0CE] rounded-xl px-3 py-2.5 text-sm text-[#243B36] focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/40 appearance-none cursor-pointer"
-    >
-      {options.map(o => (
-        <option key={o.value} value={o.value}>{o.label}</option>
-      ))}
+    <select value={value} onChange={e => onChange(e.target.value)} className="w-full bg-[#FAF7EF] border border-[#E7E0CE] rounded-xl px-3 py-2.5 text-sm text-[#243B36] focus:outline-none cursor-pointer">
+      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   );
 }
-
 function Toggle2({ value, onChange, leftLabel, rightLabel, leftIcon, rightIcon }) {
-  const leftActive = value === leftLabel;
-  const rightActive = value === rightLabel;
   return (
     <div className="flex rounded-xl overflow-hidden border border-[#E7E0CE] bg-[#FAF7EF] p-1 gap-1">
-      <button
-        onClick={() => onChange(leftLabel)}
-        className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition-all duration-200 ${
-          leftActive
-            ? "bg-gradient-to-b from-[#4FB3A6] to-[#1F7A70] text-white shadow-md scale-[1.02]"
-            : "bg-transparent text-[#9AA6A1] hover:text-[#5C6863] hover:bg-white/60"
-        }`}
-      >
-        {leftIcon}{leftLabel}
-      </button>
-      <button
-        onClick={() => onChange(rightLabel)}
-        className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition-all duration-200 ${
-          rightActive
-            ? "bg-gradient-to-b from-[#F7B955] to-[#E8933A] text-white shadow-md scale-[1.02]"
-            : "bg-transparent text-[#9AA6A1] hover:text-[#5C6863] hover:bg-white/60"
-        }`}
-      >
-        {rightIcon}{rightLabel}
-      </button>
+      <button onClick={() => onChange(leftLabel)} className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition ${value === leftLabel ? "bg-gradient-to-b from-[#4FB3A6] to-[#1F7A70] text-white shadow-md" : "text-[#9AA6A1]"}`}>{leftIcon}{leftLabel}</button>
+      <button onClick={() => onChange(rightLabel)} className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition ${value === rightLabel ? "bg-gradient-to-b from-[#F7B955] to-[#E8933A] text-white shadow-md" : "text-[#9AA6A1]"}`}>{rightIcon}{rightLabel}</button>
     </div>
   );
 }
-
 function ToggleGroup({ value, onChange, options }) {
   return (
     <div className="flex rounded-xl overflow-hidden border border-[#E7E0CE] bg-[#FAF7EF] p-1 gap-1">
-      {options.map(opt => {
-        const active = value === opt;
-        return (
-          <button
-            key={opt}
-            onClick={() => onChange(opt)}
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition-all duration-200 ${
-              active
-                ? "bg-gradient-to-b from-[#4FB3A6] to-[#1F7A70] text-white shadow-md scale-[1.02]"
-                : "bg-transparent text-[#9AA6A1] hover:text-[#5C6863] hover:bg-white/60"
-            }`}
-          >
-            {opt}
-          </button>
-        );
-      })}
+      {options.map(opt => (
+        <button key={opt} onClick={() => onChange(opt)} className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition ${value === opt ? "bg-gradient-to-b from-[#4FB3A6] to-[#1F7A70] text-white shadow-md" : "text-[#9AA6A1]"}`}>{opt}</button>
+      ))}
     </div>
   );
 }
-
 function PrimaryButton({ children, onClick, icon: IconComponent, disabled }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 font-semibold text-white text-sm tracking-wide transition
-        ${disabled ? "bg-[#DCD5C2] cursor-not-allowed" : "bg-gradient-to-r from-[#F7B955] via-[#EFA24A] to-[#E8933A] hover:brightness-105 shadow-[0_8px_20px_rgba(232,147,58,0.35)]"}`}
-    >
-      {IconComponent && <IconComponent size={16} />}
-      {children}
-    </button>
+    <button onClick={onClick} disabled={disabled} className={`w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 font-semibold text-white text-sm transition ${disabled ? "bg-[#DCD5C2] cursor-not-allowed" : "bg-gradient-to-r from-[#F7B955] via-[#EFA24A] to-[#E8933A] shadow-md"}`}>{IconComponent && <IconComponent size={16} />}{children}</button>
   );
 }
-
 function SecondaryButton({ children, onClick, icon: IconComponent }) {
-  return (
-    <button
-      onClick={onClick}
-      className="w-full flex items-center justify-center gap-2 rounded-2xl py-2.5 font-medium text-[#1F7A70] text-sm border border-[#1F7A70]/25 bg-[#F2FAF8] hover:bg-[#E9F4F2] transition"
-    >
-      {IconComponent && <IconComponent size={15} />}
-      {children}
-    </button>
-  );
+  return <button onClick={onClick} className="w-full flex items-center justify-center gap-2 rounded-2xl py-2.5 font-medium text-[#1F7A70] text-sm border border-[#1F7A70]/25 bg-[#F2FAF8] hover:bg-[#E9F4F2] transition">{IconComponent && <IconComponent size={15} />}{children}</button>;
 }
-
 function StatusPill({ status }) {
-  const map = {
-    PASS: { bg: "bg-[#E4F6EC]", text: "text-[#1E8A50]", IconComponent: CheckCircle2, label: "PASS" },
-    WARNING: { bg: "bg-[#FEF3DE]", text: "text-[#B8791A]", IconComponent: AlertTriangle, label: "WARNING" },
-    FAIL: { bg: "bg-[#FBE7E7]", text: "text-[#C13A3A]", IconComponent: XCircle, label: "FAIL" },
-  };
-  const s = map[status] || map.PASS;
-  const { IconComponent } = s;
-  return (
-    <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${s.bg} ${s.text}`}>
-      <IconComponent size={15} /> {s.label}
-    </div>
-  );
+  const map = { PASS: { bg: "bg-[#E4F6EC]", text: "text-[#1E8A50]", IconComponent: CheckCircle2, label: "PASS" }, WARNING: { bg: "bg-[#FEF3DE]", text: "text-[#B8791A]", IconComponent: AlertTriangle, label: "WARNING" }, FAIL: { bg: "bg-[#FBE7E7]", text: "text-[#C13A3A]", IconComponent: XCircle, label: "FAIL" } };
+  const s = map[status] || map.PASS; const { IconComponent } = s;
+  return <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${s.bg} ${s.text}`}><IconComponent size={15} /> {s.label}</div>;
 }
-
 function Logo({ title }) {
   return (
     <div className="flex items-center gap-2 mb-6">
-      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#4FB3A6] to-[#1F7A70] flex items-center justify-center">
-        <Droplet size={18} className="text-white" fill="white" fillOpacity={0.25} />
-      </div>
+      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#4FB3A6] to-[#1F7A70] flex items-center justify-center"><Droplet size={18} className="text-white" fill="white" fillOpacity={0.25} /></div>
       <span className="font-bold tracking-tight text-[#1F3B36] text-[15px]">{title}</span>
     </div>
   );
 }
 
 function FixtureSearchSelect({ options, value, onChange, isMissing }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-
+  const [open, setOpen] = useState(false); const [query, setQuery] = useState("");
   const selected = options.find(o => o._key === value);
-  const q = query.trim().toLowerCase();
-  const filtered = q === ""
-    ? options
-    : options.filter(o => `${o.name || ""} ${o.abbr || ""}`.toLowerCase().includes(q));
-
+  const filtered = query.trim() === "" ? options : options.filter(o => `${o.name || ""} ${o.abbr || ""}`.toLowerCase().includes(query.trim().toLowerCase()));
   return (
     <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between gap-2 bg-[#FAF7EF] border border-[#E7E0CE] rounded-lg px-2.5 py-2 text-sm text-[#243B36] focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/30"
-      >
-        <span className="truncate text-left">
-          {selected ? `${selected.name}${selected.abbr ? ` (${selected.abbr})` : ""}` : "Chọn fixture"}
-        </span>
+      <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between gap-2 bg-[#FAF7EF] border border-[#E7E0CE] rounded-lg px-2.5 py-2 text-sm text-[#243B36]">
+        <span className="truncate text-left">{selected ? `${selected.name}${selected.abbr ? ` (${selected.abbr})` : ""}` : "Chọn fixture"}</span>
         {selected && isMissing(selected) && <AlertTriangle size={13} className="text-[#C13A3A] shrink-0" />}
       </button>
-
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => { setOpen(false); setQuery(""); }} />
           <div className="absolute z-20 mt-1 w-full bg-white border border-[#E7E0CE] rounded-xl shadow-lg overflow-hidden">
-            <div className="p-2 border-b border-[#EDE6D6]">
-              <div className="flex items-center gap-1.5 bg-[#FAF7EF] rounded-lg px-2 py-1.5">
-                <Search size={13} className="text-[#9AA6A1] shrink-0" />
-                <input
-                  autoFocus
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  placeholder="Tìm theo tên hoặc mã fixture..."
-                  className="w-full bg-transparent text-sm outline-none text-[#243B36]"
-                />
-              </div>
-            </div>
+            <div className="p-2 border-b border-[#EDE6D6]"><div className="flex items-center gap-1.5 bg-[#FAF7EF] rounded-lg px-2 py-1.5"><Search size={13} className="text-[#9AA6A1]" /><input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Tìm fixture..." className="w-full bg-transparent text-sm outline-none" /></div></div>
             <div className="max-h-52 overflow-y-auto">
-              {filtered.length === 0 && (
-                <div className="px-3 py-3 text-xs text-[#9AA6A1]">Không tìm thấy fixture phù hợp.</div>
-              )}
-              {filtered.map(f => {
-                const miss = isMissing(f);
-                const isSelected = f._key === value;
-                return (
-                  <button
-                    type="button"
-                    key={f._key}
-                    onClick={() => { onChange(f._key); setOpen(false); setQuery(""); }}
-                    className={`w-full flex items-center justify-between gap-2 text-left px-3 py-2 text-sm transition ${
-                      isSelected ? "bg-[#EAF5F2] text-[#1F7A70] font-medium" : "text-[#243B36] hover:bg-[#F2FAF8]"
-                    }`}
-                  >
-                    <span className="truncate">{f.name}{f.abbr ? ` (${f.abbr})` : ""}</span>
-                    {miss && <span className="text-[10px] font-medium text-[#C13A3A] shrink-0">thiếu FU</span>}
-                  </button>
-                );
-              })}
+              {filtered.map(f => (
+                <button type="button" key={f._key} onClick={() => { onChange(f._key); setOpen(false); setQuery(""); }} className="w-full flex items-center justify-between text-left px-3 py-2 text-sm hover:bg-[#F2FAF8]">
+                  <span className="truncate">{f.name}{f.abbr ? ` (${f.abbr})` : ""}</span>
+                  {isMissing(f) && <span className="text-[10px] text-[#C13A3A]">thiếu FU</span>}
+                </button>
+              ))}
             </div>
           </div>
         </>
@@ -327,175 +324,55 @@ function FixtureSearchSelect({ options, value, onChange, isMissing }) {
 
 function buildInitialFixtureRows(db, seedStandard, seedSystemType) {
   const pool = db.fixtures.filter(f => f.standard === seedStandard && (f.systemType ?? "") === (seedSystemType ?? ""));
-  const findFirst = pred => {
-    const f = pool.find(pred);
-    if (!f) return null;
-    const key = `${f.standard}||${f.systemType ?? ""}||${f.name ?? ""}||${f.abbr ?? ""}`;
-    return { fixtureId: key, qty: 1 };
-  };
-  const rows = [
-    findFirst(f => (f.abbr || "").toString().toUpperCase().startsWith("WC")),
-    findFirst(f => (f.name || "").toLowerCase().includes("basin")),
-    findFirst(f => (f.name || "").toLowerCase().includes("shower")),
-    findFirst(f => (f.abbr || "").toString().toUpperCase().startsWith("UR")),
-  ];
-  return rows.filter(Boolean);
+  const findFirst = pred => { const f = pool.find(pred); return f ? { fixtureId: `${f.standard}||${f.systemType ?? ""}||${f.name ?? ""}||${f.abbr ?? ""}`, qty: 1 } : null; };
+  return [findFirst(f => (f.abbr || "").toString().toUpperCase().startsWith("WC")), findFirst(f => (f.name || "").toLowerCase().includes("basin")), findFirst(f => (f.name || "").toLowerCase().includes("shower")), findFirst(f => (f.abbr || "").toString().toUpperCase().startsWith("UR"))].filter(Boolean);
 }
 
-function Module1({
-  DB, onGoto,
-  standard, setStandard, buildingType, setBuildingType, systemType, setSystemType,
-  waterSystem, setWaterSystem, flushingType, setFlushingType, fixtures, setFixtures,
-  calculated, setCalculated,
-  standardOptions, systemTypeOptions, flushingTypeOptions,
-  availableFixtures, totalFU, missingFuKeys, designFlow, fuRange, outOfRange,
-}) {
-  const updateQty = (idx, qty) => {
-    const copy = [...fixtures];
-    copy[idx] = { ...copy[idx], qty: Math.max(0, parseInt(qty) || 0) };
-    setFixtures(copy);
-    setCalculated(false);
-  };
+function Module1({ DB, onGoto, standard, setStandard, buildingType, setBuildingType, systemType, setSystemType, waterSystem, setWaterSystem, flushingType, setFlushingType, fixtures, setFixtures, calculated, setCalculated, standardOptions, systemTypeOptions, flushingTypeOptions, availableFixtures, totalFU, missingFuKeys, designFlow, fuRange, outOfRange }) {
+  const updateQty = (idx, qty) => { const copy = [...fixtures]; copy[idx] = { ...copy[idx], qty: Math.max(0, parseInt(qty) || 0) }; setFixtures(copy); setCalculated(false); };
   const removeRow = idx => { setFixtures(fixtures.filter((_, i) => i !== idx)); setCalculated(false); };
-  const addRow = () => {
-    const used = new Set(fixtures.map(f => f.fixtureId));
-    const next = availableFixtures.find(f => !used.has(f._key)) || availableFixtures[0];
-    if (!next) return;
-    setFixtures([...fixtures, { fixtureId: next._key, qty: 1 }]);
-    setCalculated(false);
-  };
-  const updateFixture = (idx, fixtureId) => {
-    const copy = [...fixtures];
-    copy[idx] = { ...copy[idx], fixtureId };
-    setFixtures(copy);
-    setCalculated(false);
-  };
-
-  const canCalc = fixtures.length > 0;
+  const addRow = () => { const used = new Set(fixtures.map(f => f.fixtureId)); const next = availableFixtures.find(f => !used.has(f._key)) || availableFixtures[0]; if (next) setFixtures([...fixtures, { fixtureId: next._key, qty: 1 }]); setCalculated(false); };
+  const updateFixture = (idx, fixtureId) => { const copy = [...fixtures]; copy[idx] = { ...copy[idx], fixtureId }; setFixtures(copy); setCalculated(false); };
 
   return (
     <div className="max-w-5xl mx-auto px-5 py-8">
       <Logo title="Water Demand Assistant" />
-
       <div className="grid md:grid-cols-2 gap-6">
         <div className="space-y-6">
           <Card>
             <SectionTitle icon={Settings}>Project Settings</SectionTitle>
-            <Field label="Design Standard">
-              <Select
-                value={standard}
-                onChange={v => { setStandard(v); setCalculated(false); }}
-                options={standardOptions.map(v => ({ value: v, label: v }))}
-              />
-            </Field>
-            {systemTypeOptions.length > 0 && (
-              <Field label="System Type">
-                <Select
-                  value={systemType}
-                  onChange={v => { setSystemType(v); setCalculated(false); }}
-                  options={systemTypeOptions.map(v => ({ value: v, label: v }))}
-                />
-              </Field>
-            )}
-            <Field label="Flushing Type (toàn dự án)">
-              <ToggleGroup
-                value={flushingType}
-                onChange={v => { setFlushingType(v); setCalculated(false); }}
-                options={flushingTypeOptions}
-              />
-            </Field>
-            <Field label="Water System">
-              <Toggle2
-                value={waterSystem}
-                onChange={v => { setWaterSystem(v); setCalculated(false); }}
-                leftLabel="Cold Water" rightLabel="Hot Water"
-                leftIcon={<span>❄️</span>} rightIcon={<span>☀️</span>}
-              />
-            </Field>
-            <Field label="Building Type (thông tin dự án)">
-              <Select
-                value={buildingType}
-                onChange={setBuildingType}
-                options={["Residential", "Hotel", "Hospital"].map(v => ({ value: v, label: v }))}
-              />
-            </Field>
+            <Field label="Design Standard"><Select value={standard} onChange={v => { setStandard(v); setCalculated(false); }} options={standardOptions.map(v => ({ value: v, label: v }))} /></Field>
+            {systemTypeOptions.length > 0 && <Field label="System Type"><Select value={systemType} onChange={v => { setSystemType(v); setCalculated(false); }} options={systemTypeOptions.map(v => ({ value: v, label: v }))} /></Field>}
+            <Field label="Flushing Type"><ToggleGroup value={flushingType} onChange={v => { setFlushingType(v); setCalculated(false); }} options={flushingTypeOptions} /></Field>
+            <Field label="Water System"><Toggle2 value={waterSystem} onChange={v => { setWaterSystem(v); setCalculated(false); }} leftLabel="Cold Water" rightLabel="Hot Water" leftIcon={<span>❄️</span>} rightIcon={<span>☀️</span>} /></Field>
+            <Field label="Building Type"><Select value={buildingType} onChange={setBuildingType} options={["Residential", "Hotel", "Hospital"].map(v => ({ value: v, label: v }))} /></Field>
           </Card>
         </div>
-
         <div className="space-y-6">
           <Card>
             <SectionTitle icon={Droplet}>Add &amp; Edit Fixtures</SectionTitle>
             <div className="space-y-2">
-              <div className="grid grid-cols-[1fr_70px_32px] text-xs font-medium text-[#7D8B87] px-1">
-                <span>Fixture</span><span className="text-center">Qty</span><span />
-              </div>
               {fixtures.map((row, idx) => (
                 <div key={idx} className="grid grid-cols-[1fr_70px_32px] items-center gap-2">
-                  <FixtureSearchSelect
-                    options={availableFixtures}
-                    value={row.fixtureId}
-                    onChange={fixtureId => updateFixture(idx, fixtureId)}
-                    isMissing={f => {
-                      const raw = waterSystem === "Cold Water" ? f.fuCold : (f.fuHot ?? f.fuCold);
-                      return raw === null || raw === undefined;
-                    }}
-                  />
-                  <input
-                    type="number" min={0} value={row.qty}
-                    onChange={e => updateQty(idx, e.target.value)}
-                    className="w-full bg-[#FAF7EF] border border-[#E7E0CE] rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/30"
-                  />
-                  <button onClick={() => removeRow(idx)} className="text-[#C13A3A]/70 hover:text-[#C13A3A] flex justify-center">
-                    <Trash2 size={16} />
-                  </button>
+                  <FixtureSearchSelect options={availableFixtures} value={row.fixtureId} onChange={fixtureId => updateFixture(idx, fixtureId)} isMissing={f => (waterSystem === "Cold Water" ? f.fuCold : (f.fuHot ?? f.fuCold)) == null} />
+                  <input type="number" min={0} value={row.qty} onChange={e => updateQty(idx, e.target.value)} className="w-full bg-[#FAF7EF] border border-[#E7E0CE] rounded-lg px-2 py-2 text-sm text-center" />
+                  <button onClick={() => removeRow(idx)} className="text-[#C13A3A]/70 hover:text-[#C13A3A] flex justify-center"><Trash2 size={16} /></button>
                 </div>
               ))}
-              <button onClick={addRow} className="w-full mt-2 flex items-center justify-center gap-1.5 text-sm font-medium text-[#1F7A70] border border-dashed border-[#1F7A70]/40 rounded-xl py-2 hover:bg-[#F2FAF8]">
-                <Plus size={15} /> Add New Fixture
-              </button>
+              <button onClick={addRow} className="w-full mt-2 flex items-center justify-center gap-1.5 text-sm font-medium text-[#1F7A70] border border-dashed border-[#1F7A70]/40 rounded-xl py-2"><Plus size={15} /> Add New Fixture</button>
             </div>
           </Card>
-
-          <PrimaryButton icon={Gauge} disabled={!canCalc} onClick={() => setCalculated(true)}>
-            Calculate
-          </PrimaryButton>
-
+          <PrimaryButton icon={Gauge} disabled={fixtures.length === 0} onClick={() => setCalculated(true)}>Calculate</PrimaryButton>
           <Card>
             <SectionTitle icon={TrendingUp}>Calculation Results</SectionTitle>
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-[#F2FAF8] rounded-2xl p-4">
-                <div className="text-xs text-[#7D8B87] mb-1">Total Fixture Units</div>
-                <div className="text-2xl font-bold text-[#1F7A70]">{calculated ? fmt(totalFU, 2) : "-"}</div>
-              </div>
-              <div className="bg-[#FEF3DE] rounded-2xl p-4">
-                <div className="text-xs text-[#7D8B87] mb-1">Design Flow (L/s)</div>
-                <div className="text-2xl font-bold text-[#B8791A]">{calculated ? fmt(designFlow, 3) : "-"}</div>
-              </div>
+              <div className="bg-[#F2FAF8] rounded-2xl p-4"><div className="text-xs text-[#7D8B87]">Total Fixture Units</div><div className="text-2xl font-bold text-[#1F7A70]">{calculated ? fmt(totalFU, 2) : "-"}</div></div>
+              <div className="bg-[#FEF3DE] rounded-2xl p-4"><div className="text-xs text-[#7D8B87]">Design Flow (L/s)</div><div className="text-2xl font-bold text-[#B8791A]">{calculated ? fmt(designFlow, 3) : "-"}</div></div>
             </div>
-            {calculated && missingFuKeys.length > 0 && (
-              <div className="mt-3 text-xs text-[#C13A3A] bg-[#FBE7E7] rounded-xl p-3">
-                Không thể tính: có {missingFuKeys.length} fixture đang chọn thiếu dữ liệu FU trong database.
-              </div>
-            )}
-            {calculated && outOfRange && (
-              <div className="mt-3 text-xs text-[#C13A3A] bg-[#FBE7E7] rounded-xl p-3">
-                ⚠ Total FU nằm {outOfRange === "below" ? "dưới" : "trên"} phạm vi database FU-to-flowrate ({standard} + {flushingType}).
-                <br />
-                Total FU: {fmt(totalFU, 2)} — Phạm vi khả dụng: {fuRange?.min} – {fuRange?.max} FU.
-              </div>
-            )}
           </Card>
-
           <div className="grid grid-cols-2 gap-3">
             <SecondaryButton icon={FileSpreadsheet}>Export to Excel</SecondaryButton>
-            <button
-              onClick={() => onGoto("m2")}
-              disabled={!calculated || designFlow == null}
-              className={`flex items-center justify-center gap-2 rounded-2xl py-2.5 text-sm font-semibold text-white transition
-                ${(!calculated || designFlow == null) ? "bg-[#DCD5C2] cursor-not-allowed" : "bg-gradient-to-r from-[#4FB3A6] to-[#1F7A70] hover:brightness-105"}`}
-            >
-              Send to Pipe Design <ArrowRight size={15} />
-            </button>
+            <button onClick={() => onGoto("m2")} disabled={!calculated || designFlow == null} className={`flex items-center justify-center gap-2 rounded-2xl py-2.5 text-sm font-semibold text-white transition ${(!calculated || designFlow == null) ? "bg-[#DCD5C2]" : "bg-gradient-to-r from-[#4FB3A6] to-[#1F7A70]"}`}>Send to Pipe Design <ArrowRight size={15} /></button>
           </div>
         </div>
       </div>
@@ -512,40 +389,19 @@ function Module2({ DB, standard, waterSystem, designFlow, onGoto }) {
   const [result, setResult] = useState(null);
 
   const materialInfo = DB.materials.find(m => m.material === material);
-
-  const velocitySystem = waterSystem === "Cold Water" ? "CW"
-    : waterSystem === "Hot Water" ? "HW"
-    : null;
-
-  const velCriteria = velocitySystem
-    ? DB.velocity.find(v => v.standard === standard && v.building === building && v.system === velocitySystem)
-    : undefined;
+  const velocitySystem = waterSystem === "Cold Water" ? "CW" : "HW";
+  const velCriteria = DB.velocity.find(v => v.standard === standard && v.building === building && v.system === velocitySystem);
 
   const calculate = () => {
     if (!velCriteria) { setResult({ noCriteria: true }); return; }
-
     const sizes = DB.pipeSizes.filter(p => p.material === material).sort((a, b) => a.od - b.od);
     const limit = velocityMode === "Auto" ? velCriteria.recommended : manualVelocity;
-
-    let chosen = null;
-    for (const p of sizes) {
-      const v = velocityMs(flow, p.id);
-      if (v <= limit) { chosen = { ...p, velocity: v }; break; }
-    }
-    if (!chosen && sizes.length > 0) {
-      const last = sizes[sizes.length - 1];
-      chosen = { ...last, velocity: velocityMs(flow, last.id) };
-    }
+    let chosen = sizes.find(p => velocityMs(flow, p.id) <= limit) || sizes[sizes.length - 1];
     if (!chosen) { setResult({ notFound: true }); return; }
-
     const hf = headLossHW(flow, chosen.id, materialInfo ? materialInfo.c : 150, 100);
-    const pLoss = pressureLossKPa(hf);
-
-    let status = "PASS";
-    if (chosen.velocity > velCriteria.maximum) status = "FAIL";
-    else if (chosen.velocity > velCriteria.recommended) status = "WARNING";
-
-    setResult({ dn: chosen.dn, velocity: chosen.velocity, headLoss: hf, pressureLoss: pLoss, status });
+    const v = velocityMs(flow, chosen.id);
+    let status = v > velCriteria.maximum ? "FAIL" : v > velCriteria.recommended ? "WARNING" : "PASS";
+    setResult({ dn: chosen.dn, velocity: v, headLoss: hf, pressureLoss: pressureLossKPa(hf), status });
   };
 
   useEffect(() => { calculate(); }, [standard, waterSystem, building, material, velocityMode]);
@@ -554,214 +410,47 @@ function Module2({ DB, standard, waterSystem, designFlow, onGoto }) {
     <div className="max-w-5xl mx-auto px-5 py-8">
       <div className="flex items-center justify-between mb-2">
         <Logo title="Pipe Design Assistant" />
-        <button onClick={() => onGoto("m1")} className="flex items-center gap-1 text-sm text-[#7D8B87] hover:text-[#1F7A70] mb-6">
-          <ArrowLeft size={14} /> Water Demand
-        </button>
+        <button onClick={() => onGoto("m1")} className="flex items-center gap-1 text-sm text-[#7D8B87] hover:text-[#1F7A70] mb-6"><ArrowLeft size={14} /> Water Demand</button>
       </div>
-
       <div className="grid md:grid-cols-3 gap-6">
         <Card className="md:col-span-1">
           <SectionTitle icon={Settings}>Pipe Configuration</SectionTitle>
-          <div className="mb-4 text-xs text-[#1F7A70] bg-[#EAF5F2] rounded-lg px-3 py-2">
-            Standard: <strong>{standard}</strong> · Water System: <strong>{waterSystem}</strong>
-          </div>
-          <Field label="Flow (L/s)">
-            <input
-              type="number" step="0.01" value={flow}
-              onChange={e => setFlow(parseFloat(e.target.value) || 0)}
-              className="w-full bg-[#FAF7EF] border border-[#E7E0CE] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/30"
-            />
-          </Field>
-          <Field label="Material">
-            <Select value={material} onChange={setMaterial} options={DB.materials.map(m => ({ value: m.material, label: m.material }))} />
-          </Field>
-          <Field label="Building (Velocity Criteria)">
-            <Select value={building} onChange={setBuilding} options={["Residential", "Hotel", "Hospital"].map(v => ({ value: v, label: v }))} />
-          </Field>
-          <Field label="Velocity Limit">
-            <Toggle2 value={velocityMode} onChange={setVelocityMode} leftLabel="Auto" rightLabel="Manual" />
-          </Field>
-          {velocityMode === "Manual" && (
-            <Field label="Manual Velocity (m/s)">
-              <input
-                type="number" step="0.1" value={manualVelocity}
-                onChange={e => setManualVelocity(parseFloat(e.target.value) || 0)}
-                className="w-full bg-[#FAF7EF] border border-[#E7E0CE] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/30"
-              />
-            </Field>
-          )}
-          {velocityMode === "Auto" && velCriteria && (
-            <p className="text-xs text-[#7D8B87] mt-2 leading-relaxed">
-              Auto dùng ngưỡng Recommended = {velCriteria.recommended} m/s (Max {velCriteria.maximum} m/s) từ Database.
-            </p>
-          )}
+          <div className="mb-4 text-xs text-[#1F7A70] bg-[#EAF5F2] rounded-lg px-3 py-2">Standard: <strong>{standard}</strong> · Water System: <strong>{waterSystem}</strong></div>
+          <Field label="Flow (L/s)"><input type="number" step="0.01" value={flow} onChange={e => setFlow(parseFloat(e.target.value) || 0)} className="w-full bg-[#FAF7EF] border border-[#E7E0CE] rounded-xl px-3 py-2.5 text-sm" /></Field>
+          <Field label="Material"><Select value={material} onChange={setMaterial} options={DB.materials.map(m => ({ value: m.material, label: m.material }))} /></Field>
+          <Field label="Building"><Select value={building} onChange={setBuilding} options={["Residential", "Hotel", "Hospital"].map(v => ({ value: v, label: v }))} /></Field>
+          <Field label="Velocity Limit"><Toggle2 value={velocityMode} onChange={setVelocityMode} leftLabel="Auto" rightLabel="Manual" /></Field>
         </Card>
-
         <div className="md:col-span-2 space-y-6">
           <PrimaryButton icon={Gauge} onClick={calculate}>Calculate Now</PrimaryButton>
-
           <Card>
             <SectionTitle icon={Ruler}>Design Results</SectionTitle>
-            {result?.noCriteria ? (
-              <div className="text-sm text-[#C13A3A] bg-[#FBE7E7] rounded-xl p-4">
-                Velocity Criteria không có trong database cho Standard + Building + Water System đang chọn.
-              </div>
-            ) : result?.notFound ? (
-              <div className="text-sm text-[#C13A3A] bg-[#FBE7E7] rounded-xl p-4">
-                No suitable pipe size found.
-              </div>
-            ) : (
+            {result?.notFound ? <div className="text-sm text-[#C13A3A]">No suitable pipe size found.</div> : (
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-[#F2FAF8] rounded-2xl p-4">
-                  <div className="text-xs text-[#7D8B87] mb-1">Recommended Pipe</div>
-                  <div className="text-2xl font-bold text-[#1F7A70]">{result?.dn ?? "-"}</div>
-                </div>
-                <div className="bg-[#EAF1FB] rounded-2xl p-4">
-                  <div className="text-xs text-[#7D8B87] mb-1">Velocity</div>
-                  <div className="text-2xl font-bold text-[#2D5FA6]">{fmt(result?.velocity, 2)} m/s</div>
-                </div>
-                <div className="bg-[#FEF3DE] rounded-2xl p-4">
-                  <div className="text-xs text-[#7D8B87] mb-1">Head Loss / 100m</div>
-                  <div className="text-2xl font-bold text-[#B8791A]">{fmt(result?.headLoss, 2)} m</div>
-                </div>
-                <div className="bg-[#F5EFFB] rounded-2xl p-4">
-                  <div className="text-xs text-[#7D8B87] mb-1">Pressure Loss / 100m</div>
-                  <div className="text-2xl font-bold text-[#7A4FB8]">{fmt(result?.pressureLoss, 1)} kPa</div>
-                </div>
+                <div className="bg-[#F2FAF8] rounded-2xl p-4"><div className="text-xs text-[#7D8B87]">Recommended Pipe</div><div className="text-2xl font-bold text-[#1F7A70]">{result?.dn ?? "-"}</div></div>
+                <div className="bg-[#EAF1FB] rounded-2xl p-4"><div className="text-xs text-[#7D8B87]">Velocity</div><div className="text-2xl font-bold text-[#2D5FA6]">{fmt(result?.velocity, 2)} m/s</div></div>
+                <div className="bg-[#FEF3DE] rounded-2xl p-4"><div className="text-xs text-[#7D8B87]">Head Loss / 100m</div><div className="text-2xl font-bold text-[#B8791A]">{fmt(result?.headLoss, 2)} m</div></div>
+                <div className="bg-[#F5EFFB] rounded-2xl p-4"><div className="text-xs text-[#7D8B87]">Pressure Loss / 100m</div><div className="text-2xl font-bold text-[#7A4FB8]">{fmt(result?.pressureLoss, 1)} kPa</div></div>
               </div>
             )}
-            {result && !result.notFound && !result.noCriteria && (
-              <div className="mt-4 flex items-center justify-between bg-[#FAF7EF] rounded-2xl px-4 py-3">
-                <span className="text-sm text-[#7D8B87]">Status</span>
-                <StatusPill status={result.status} />
-              </div>
-            )}
+            {result && !result.notFound && <div className="mt-4 flex items-center justify-between bg-[#FAF7EF] rounded-2xl px-4 py-3"><span className="text-sm text-[#7D8B87]">Status</span><StatusPill status={result.status} /></div>}
           </Card>
-
-          <div className="grid grid-cols-2 gap-3">
-            <SecondaryButton icon={FileSpreadsheet}>Export to Excel</SecondaryButton>
-            <SecondaryButton icon={FileText}>View Full Report</SecondaryButton>
-          </div>
         </div>
       </div>
     </div>
   );
 }
 
-/* ============================ Excel import & Storage ============================ */
-
-function sheetRows(wb, name) {
-  const ws = wb.Sheets[name];
-  if (!ws) return [];
-  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
-}
-
-function parseWorkbook(wb) {
-  const pipeSizes = sheetRows(wb, "Pipe_Sizes")
-    .filter(r => r[0] != null && r[0] !== "ID")
-    .map(r => ({ material: r[1], dn: r[4], od: r[5], id: r[6] }));
-
-  const materials = sheetRows(wb, "Material")
-    .filter(r => r[0] != null && r[0] !== "Material")
-    .map(r => ({ material: r[0], c: r[1], roughness: r[3] }));
-
-  const fixtures = sheetRows(wb, "Fixture Unit")
-    .filter(r => r[0] != null && r[0] !== "Standard")
-    .map(r => ({
-      standard: r[0], systemType: r[1],
-      name: typeof r[2] === "string" ? r[2].trim() : r[2],
-      abbr: r[3], fuCold: r[4], fuHot: r[5], fuTotal: r[6],
-    }));
-
-  const fu2flow = sheetRows(wb, "FU to flowrate")
-    .filter(r => r[0] != null && r[0] !== "Standard")
-    .map(r => ({ standard: r[0], type: r[1], fu: r[2], ls: r[4] }))
-    .filter(r => typeof r.fu === "number");
-
-  const velocity = sheetRows(wb, "Velocity Criteria")
-    .filter(r => r[0] != null && r[0] !== "Standard")
-    .map(r => ({ standard: r[0], building: r[1], system: r[2], recommended: r[3], maximum: r[4] }));
-
-  return { pipeSizes, materials, fixtures, fu2flow, velocity };
-}
-
-const IMPORTED_DB_STORAGE_KEY = "imported-database-v1";
-
-function migrateStandardTypo(db) {
-  if (!db) return db;
-  const FIX = { "AS NSZ": "AS NZS" };
-  const fixStd = s => (s in FIX ? FIX[s] : s);
-  return {
-    ...db,
-    fixtures: Array.isArray(db.fixtures)
-      ? db.fixtures.map(f => (f.standard in FIX ? { ...f, standard: fixStd(f.standard) } : f))
-      : db.fixtures,
-    fu2flow: Array.isArray(db.fu2flow)
-      ? db.fu2flow.map(r => (r.standard in FIX ? { ...r, standard: fixStd(r.standard) } : r))
-      : db.fu2flow,
-    velocity: Array.isArray(db.velocity)
-      ? db.velocity.map(v => (v.standard in FIX ? { ...v, standard: fixStd(v.standard) } : v))
-      : db.velocity,
-  };
-}
-
-function ImportBar({ onImport, usingCustom, onReset }) {
-  const inputRef = useRef(null);
-  const [msg, setMsg] = useState(null);
-
-  const handleFile = async e => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array" });
-      const db = parseWorkbook(wb);
-      if (db.pipeSizes.length === 0 || db.fixtures.length === 0) {
-        throw new Error("Không tìm thấy đủ sheet trong file.");
-      }
-      onImport(db);
-      setMsg({ ok: true, text: `Đã nạp thành công database mới!` });
-    } catch (err) {
-      setMsg({ ok: false, text: "Lỗi đọc file: " + err.message });
-    } finally {
-      e.target.value = "";
-    }
-  };
-
-  return (
-    <div className="max-w-5xl mx-auto px-5 pt-5">
-      <div className="flex flex-wrap items-center gap-3 bg-white/70 backdrop-blur border border-[#EDE6D6] rounded-2xl px-4 py-2.5">
-        <button
-          onClick={() => inputRef.current?.click()}
-          className="flex items-center gap-1.5 text-xs font-semibold text-[#1F7A70] bg-[#EAF5F2] hover:bg-[#DFF0EC] px-3 py-1.5 rounded-full transition"
-        >
-          <Upload size={13} /> Cập nhật Database (.xlsx)
-        </button>
-        <input ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFile} />
-        {usingCustom && (
-          <button
-            onClick={() => { onReset(); setMsg(null); }}
-            className="flex items-center gap-1.5 text-xs font-medium text-[#7D8B87] hover:text-[#5C6863] px-3 py-1.5 rounded-full transition"
-          >
-            <RotateCcw size={13} /> Dùng lại dữ liệu mặc định
-          </button>
-        )}
-        <span className={`text-xs ${usingCustom ? "text-[#1F7A70]" : "text-[#B7BEB9]"}`}>
-          {usingCustom ? "● Database: Imported" : "○ Database: Default"}
-        </span>
-        {msg && (
-          <span className={`text-xs ${msg.ok ? "text-[#1E8A50]" : "text-[#C13A3A]"}`}>{msg.text}</span>
-        )}
-      </div>
-    </div>
-  );
-}
+/* ============================ App (Quản lý User & Trial) ============================ */
 
 function App() {
-  const [screen, setScreen] = useState("m1");
-  const [db, setDb] = useState(() => migrateStandardTypo(DEFAULT_DB));
-  const [usingCustom, setUsingCustom] = useState(false);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [trialDaysLeft, setTrialDaysLeft] = useState(0);
+  const [isTrialExpired, setIsTrialExpired] = useState(false);
 
+  const [screen, setScreen] = useState("m1");
+  const [db, setDb] = useState(DEFAULT_DB);
   const [standard, setStandard] = useState("IPC");
   const [buildingType, setBuildingType] = useState("Hotel");
   const [systemType, setSystemType] = useState("");
@@ -770,152 +459,101 @@ function App() {
   const [fixtures, setFixtures] = useState(() => buildInitialFixtureRows(DEFAULT_DB, "IPC", ""));
   const [calculated, setCalculated] = useState(false);
 
-  // Khôi phục Database từ LocalStorage
+  // Kiếm tra phiên đăng nhập Supabase
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(IMPORTED_DB_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && Array.isArray(parsed.pipeSizes)) {
-          setDb(migrateStandardTypo(parsed));
-          setUsingCustom(true);
-        }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        checkUserTrial(session.user);
+      } else {
+        setLoading(false);
       }
-    } catch (e) {}
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        checkUserTrial(session.user);
+      } else {
+        setUser(null);
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const standardOptions = useMemo(() => {
-    const set = new Set();
-    db.fixtures.forEach(f => { if (f.standard) set.add(f.standard); });
-    return Array.from(set);
-  }, [db]);
-
-  useEffect(() => {
-    if (standardOptions.length > 0 && !standardOptions.includes(standard)) {
-      setStandard(standardOptions[0]);
-    }
-  }, [standardOptions]);
-
-  const systemTypeOptions = useMemo(() => {
-    const set = new Set();
-    db.fixtures.forEach(f => {
-      if (f.standard === standard && f.systemType != null && f.systemType !== "") set.add(f.systemType);
-    });
-    return Array.from(set);
-  }, [db, standard]);
-
-  useEffect(() => {
-    if (systemTypeOptions.length > 0 && !systemTypeOptions.includes(systemType)) {
-      setSystemType(systemTypeOptions[0]);
-    } else if (systemTypeOptions.length === 0 && systemType !== "") {
-      setSystemType("");
-    }
-  }, [systemTypeOptions]);
-
-  const flushingTypeOptions = useMemo(() => {
-    const set = new Set();
-    db.fu2flow.forEach(r => { if (r.standard === standard && r.type) set.add(r.type); });
-    return Array.from(set);
-  }, [db, standard]);
-
-  useEffect(() => {
-    if (flushingTypeOptions.length > 0 && !flushingTypeOptions.includes(flushingType)) {
-      setFlushingType(flushingTypeOptions[0]);
-    }
-  }, [flushingTypeOptions]);
-
-  const fixtureKey = f => `${f.standard}||${f.systemType ?? ""}||${f.name ?? ""}||${f.abbr ?? ""}`;
-
-  const availableFixtures = useMemo(() => {
-    return db.fixtures
-      .filter(f => f.standard === standard && (systemTypeOptions.length === 0 || f.systemType === systemType))
-      .map(f => ({ ...f, _key: fixtureKey(f) }));
-  }, [db, standard, systemType, systemTypeOptions]);
-
-  const fixtureByKey = useMemo(() => {
-    const map = {};
-    availableFixtures.forEach(f => { map[f._key] = f; });
-    return map;
-  }, [availableFixtures]);
-
-  const prevKeyRef = useRef(`${standard}|${systemType}`);
-  useEffect(() => {
-    const key = `${standard}|${systemType}`;
-    if (prevKeyRef.current !== key) {
-      prevKeyRef.current = key;
-      setFixtures(buildInitialFixtureRows(db, standard, systemType));
-      setCalculated(false);
-    }
-  }, [standard, systemType]);
-
-  const isHotWaterIneligible = f => {
-    const a = (f.abbr || "").toString().toUpperCase();
-    return a.startsWith("WC") || a.startsWith("UR");
+  // Tính thời gian dùng thử 14 ngày
+  const checkUserTrial = (userData) => {
+    setUser(userData);
+    const createdAt = new Date(userData.created_at);
+    const now = new Date();
+    const diffTime = Math.abs(now - createdAt);
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    const daysLeft = TRIAL_DAYS - diffDays;
+    setTrialDaysLeft(daysLeft > 0 ? daysLeft : 0);
+    setIsTrialExpired(diffDays > TRIAL_DAYS);
+    setLoading(false);
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  };
+
+  // Tính toán các mảng của App
+  const standardOptions = useMemo(() => Array.from(new Set(db.fixtures.map(f => f.standard).filter(Boolean))), [db]);
+  const systemTypeOptions = useMemo(() => Array.from(new Set(db.fixtures.filter(f => f.standard === standard && f.systemType).map(f => f.systemType))), [db, standard]);
+  const flushingTypeOptions = useMemo(() => Array.from(new Set(db.fu2flow.filter(r => r.standard === standard && r.type).map(r => r.type))), [db, standard]);
+  const availableFixtures = useMemo(() => db.fixtures.filter(f => f.standard === standard && (systemTypeOptions.length === 0 || f.systemType === systemType)).map(f => ({ ...f, _key: `${f.standard}||${f.systemType ?? ""}||${f.name ?? ""}||${f.abbr ?? ""}` })), [db, standard, systemType, systemTypeOptions]);
+  const fixtureByKey = useMemo(() => { const map = {}; availableFixtures.forEach(f => { map[f._key] = f; }); return map; }, [availableFixtures]);
+
   const { totalFU, missingFuKeys } = useMemo(() => {
-    let sum = 0;
-    const missing = [];
+    let sum = 0; const missing = [];
     for (const row of fixtures) {
-      const fu = fixtureByKey[row.fixtureId];
-      if (!fu) continue;
-      let raw;
-      if (waterSystem === "Cold Water") {
-        raw = fu.fuCold;
-      } else if (isHotWaterIneligible(fu)) {
-        raw = 0;
-      } else {
-        raw = fu.fuHot;
-      }
-      if (raw === null || raw === undefined) {
-        missing.push(row.fixtureId);
-        continue;
-      }
+      const fu = fixtureByKey[row.fixtureId]; if (!fu) continue;
+      let raw = waterSystem === "Cold Water" ? fu.fuCold : ((fu.abbr || "").toString().toUpperCase().startsWith("WC") || (fu.abbr || "").toString().toUpperCase().startsWith("UR")) ? 0 : fu.fuHot;
+      if (raw == null) { missing.push(row.fixtureId); continue; }
       sum += raw * (row.qty || 0);
     }
     return { totalFU: missing.length > 0 ? null : sum, missingFuKeys: missing };
   }, [fixtures, fixtureByKey, waterSystem]);
 
-  const designFlow = useMemo(() => {
-    if (totalFU == null) return null;
-    return interpolate(db.fu2flow, standard, flushingType, totalFU);
-  }, [db, standard, flushingType, totalFU]);
+  const designFlow = useMemo(() => totalFU == null ? null : interpolate(db.fu2flow, standard, flushingType, totalFU), [db, standard, flushingType, totalFU]);
 
-  const fuRange = useMemo(() => getFuRange(db.fu2flow, standard, flushingType), [db, standard, flushingType]);
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center text-sm font-medium text-[#7D8B87]">Đang tải ứng dụng...</div>;
+  }
 
-  const outOfRange = useMemo(() => {
-    if (totalFU == null || !fuRange) return null;
-    if (totalFU < fuRange.min) return "below";
-    if (totalFU > fuRange.max) return "above";
-    return null;
-  }, [totalFU, fuRange]);
+  // 1. Chưa đăng nhập -> Hiện Form Auth
+  if (!user) {
+    return <AuthForm onLoginSuccess={checkUserTrial} />;
+  }
 
-  const handleImport = (newDb) => {
-    const migrated = migrateStandardTypo(newDb);
-    setDb(migrated);
-    setUsingCustom(true);
-    try {
-      localStorage.setItem(IMPORTED_DB_STORAGE_KEY, JSON.stringify(migrated));
-    } catch (e) {}
-  };
+  // 2. Hết hạn dùng thử -> Hiện màn hình Khóa
+  if (isTrialExpired) {
+    return <ExpiredTrialScreen user={user} onLogout={handleLogout} />;
+  }
 
-  const handleReset = () => {
-    setDb(migrateStandardTypo(DEFAULT_DB));
-    setUsingCustom(false);
-    try {
-      localStorage.removeItem(IMPORTED_DB_STORAGE_KEY);
-    } catch (e) {}
-  };
-
+  // 3. Đã đăng nhập & Còn thời hạn dùng thử -> Hiện App chính
   return (
-    <div className="min-h-screen w-full" style={{
-      background: "radial-gradient(circle at 15% 0%, #FBF3E4 0%, #F6EFDF 45%, #F2ECDC 100%)"
-    }}>
-      <ImportBar
-        usingCustom={usingCustom}
-        onImport={handleImport}
-        onReset={handleReset}
-      />
+    <div className="min-h-screen w-full" style={{ background: "radial-gradient(circle at 15% 0%, #FBF3E4 0%, #F6EFDF 45%, #F2ECDC 100%)" }}>
+      {/* Top Bar Quản lý User */}
+      <div className="max-w-5xl mx-auto px-5 pt-4 flex items-center justify-between">
+        <div className="flex items-center gap-2 bg-white/70 backdrop-blur border border-[#EDE6D6] px-3.5 py-1.5 rounded-full text-xs text-[#243B36]">
+          <User size={14} className="text-[#1F7A70]" />
+          <span>{user.email}</span>
+          <span className="bg-[#FEF3DE] text-[#B8791A] font-semibold px-2 py-0.5 rounded-md ml-1">
+            Còn {trialDaysLeft} ngày dùng thử
+          </span>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-1.5 text-xs font-medium text-[#C13A3A] bg-[#FBE7E7] hover:bg-[#F8D7D7] px-3 py-1.5 rounded-full transition"
+        >
+          <LogOut size={13} /> Đăng xuất
+        </button>
+      </div>
+
       {screen === "m1"
         ? <Module1
             DB={db} onGoto={setScreen}
@@ -928,7 +566,7 @@ function App() {
             calculated={calculated} setCalculated={setCalculated}
             standardOptions={standardOptions} systemTypeOptions={systemTypeOptions} flushingTypeOptions={flushingTypeOptions}
             availableFixtures={availableFixtures} totalFU={totalFU} missingFuKeys={missingFuKeys}
-            designFlow={designFlow} fuRange={fuRange} outOfRange={outOfRange}
+            designFlow={designFlow}
           />
         : <Module2 DB={db} standard={standard} waterSystem={waterSystem} designFlow={designFlow} onGoto={setScreen} />
       }
