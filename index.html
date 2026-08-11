@@ -11,7 +11,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 <!-- SheetJS (xlsx) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<!-- Lucide Icons UMD -->
+<!-- Lucide Icons CDN -->
 <script src="https://unpkg.com/lucide@latest"></script>
 <!-- Tailwind CSS -->
 <script src="https://cdn.tailwindcss.com"></script>
@@ -22,7 +22,7 @@
 <script type="text/babel">
 const { useState, useMemo, useRef, useEffect } = React;
 
-// Helper render Lucide Icon an toàn trên Web
+// Helper render Lucide Icon an toàn trên môi trường Web / Vercel
 const Icon = ({ name, size = 16, className = "", strokeWidth = 2, fill = "none", fillOpacity = 1 }) => {
   useEffect(() => {
     if (window.lucide) {
@@ -32,7 +32,7 @@ const Icon = ({ name, size = 16, className = "", strokeWidth = 2, fill = "none",
   return <i data-lucide={name} style={{ width: size, height: size }} className={`inline-block ${className}`}></i>;
 };
 
-// Định nghĩa các Icon dùng trong App
+// Khai báo các Icon dùng trong giao diện
 const Droplet = (props) => <Icon name="droplet" {...props} />;
 const Settings = (props) => <Icon name="settings" {...props} />;
 const Plus = (props) => <Icon name="plus" {...props} />;
@@ -325,123 +325,31 @@ function FixtureSearchSelect({ options, value, onChange, isMissing }) {
   );
 }
 
-function Module1({ DB, onSendFlow, onGoto }) {
-  const [standard, setStandard] = useState("IPC");
-  const [buildingType, setBuildingType] = useState("Hotel");
-  const [systemType, setSystemType] = useState("");
-  const [waterSystem, setWaterSystem] = useState("Cold Water");
-  const [flushingType, setFlushingType] = useState("");
-  const [fixtures, setFixtures] = useState([]);
-  const [calculated, setCalculated] = useState(false);
-
-  const standardOptions = useMemo(() => {
-    const set = new Set();
-    DB.fixtures.forEach(f => { if (f.standard) set.add(f.standard); });
-    return Array.from(set);
-  }, [DB]);
-
-  useEffect(() => {
-    if (standardOptions.length > 0 && !standardOptions.includes(standard)) {
-      setStandard(standardOptions[0]);
-    }
-  }, [standardOptions]);
-
-  const systemTypeOptions = useMemo(() => {
-    const set = new Set();
-    DB.fixtures.forEach(f => {
-      if (f.standard === standard && f.systemType != null && f.systemType !== "") set.add(f.systemType);
-    });
-    return Array.from(set);
-  }, [DB, standard]);
-
-  useEffect(() => {
-    if (systemTypeOptions.length > 0 && !systemTypeOptions.includes(systemType)) {
-      setSystemType(systemTypeOptions[0]);
-    } else if (systemTypeOptions.length === 0 && systemType !== "") {
-      setSystemType("");
-    }
-  }, [systemTypeOptions]);
-
-  const flushingTypeOptions = useMemo(() => {
-    const set = new Set();
-    DB.fu2flow.forEach(r => { if (r.standard === standard && r.type) set.add(r.type); });
-    return Array.from(set);
-  }, [DB, standard]);
-
-  useEffect(() => {
-    if (flushingTypeOptions.length > 0 && !flushingTypeOptions.includes(flushingType)) {
-      setFlushingType(flushingTypeOptions[0]);
-    }
-  }, [flushingTypeOptions]);
-
-  const fixtureKey = f => `${f.standard}||${f.systemType ?? ""}||${f.name ?? ""}||${f.abbr ?? ""}`;
-
-  const availableFixtures = useMemo(() => {
-    return DB.fixtures
-      .filter(f => f.standard === standard && (systemTypeOptions.length === 0 || f.systemType === systemType))
-      .map(f => ({ ...f, _key: fixtureKey(f) }));
-  }, [DB, standard, systemType, systemTypeOptions]);
-
-  const fixtureByKey = useMemo(() => {
-    const map = {};
-    availableFixtures.forEach(f => { map[f._key] = f; });
-    return map;
-  }, [availableFixtures]);
-
-  const prevKeyRef = useRef(`${standard}|${systemType}`);
-  useEffect(() => {
-    const key = `${standard}|${systemType}`;
-    if (prevKeyRef.current !== key) {
-      prevKeyRef.current = key;
-      setFixtures([]);
-      setCalculated(false);
-    }
-  }, [standard, systemType]);
-
-  const isHotWaterIneligible = f => {
-    const a = (f.abbr || "").toString().toUpperCase();
-    return a.startsWith("WC") || a.startsWith("UR");
+function buildInitialFixtureRows(db, seedStandard, seedSystemType) {
+  const pool = db.fixtures.filter(f => f.standard === seedStandard && (f.systemType ?? "") === (seedSystemType ?? ""));
+  const findFirst = pred => {
+    const f = pool.find(pred);
+    if (!f) return null;
+    const key = `${f.standard}||${f.systemType ?? ""}||${f.name ?? ""}||${f.abbr ?? ""}`;
+    return { fixtureId: key, qty: 1 };
   };
+  const rows = [
+    findFirst(f => (f.abbr || "").toString().toUpperCase().startsWith("WC")),
+    findFirst(f => (f.name || "").toLowerCase().includes("basin")),
+    findFirst(f => (f.name || "").toLowerCase().includes("shower")),
+    findFirst(f => (f.abbr || "").toString().toUpperCase().startsWith("UR")),
+  ];
+  return rows.filter(Boolean);
+}
 
-  const { totalFU, missingFuKeys } = useMemo(() => {
-    let sum = 0;
-    const missing = [];
-    for (const row of fixtures) {
-      const fu = fixtureByKey[row.fixtureId];
-      if (!fu) continue;
-
-      let raw;
-      if (waterSystem === "Cold Water") {
-        raw = fu.fuCold;
-      } else if (isHotWaterIneligible(fu)) {
-        raw = 0;
-      } else {
-        raw = fu.fuHot;
-      }
-
-      if (raw === null || raw === undefined) {
-        missing.push(row.fixtureId);
-        continue;
-      }
-      sum += raw * (row.qty || 0);
-    }
-    return { totalFU: missing.length > 0 ? null : sum, missingFuKeys: missing };
-  }, [fixtures, fixtureByKey, waterSystem]);
-
-  const designFlow = useMemo(() => {
-    if (totalFU == null) return null;
-    return interpolate(DB.fu2flow, standard, flushingType, totalFU);
-  }, [DB, standard, flushingType, totalFU]);
-
-  const fuRange = useMemo(() => getFuRange(DB.fu2flow, standard, flushingType), [DB, standard, flushingType]);
-
-  const outOfRange = useMemo(() => {
-    if (totalFU == null || !fuRange) return null;
-    if (totalFU < fuRange.min) return "below";
-    if (totalFU > fuRange.max) return "above";
-    return null;
-  }, [totalFU, fuRange]);
-
+function Module1({
+  DB, onGoto,
+  standard, setStandard, buildingType, setBuildingType, systemType, setSystemType,
+  waterSystem, setWaterSystem, flushingType, setFlushingType, fixtures, setFixtures,
+  calculated, setCalculated,
+  standardOptions, systemTypeOptions, flushingTypeOptions,
+  availableFixtures, totalFU, missingFuKeys, designFlow, fuRange, outOfRange,
+}) {
   const updateQty = (idx, qty) => {
     const copy = [...fixtures];
     copy[idx] = { ...copy[idx], qty: Math.max(0, parseInt(qty) || 0) };
@@ -581,7 +489,7 @@ function Module1({ DB, onSendFlow, onGoto }) {
           <div className="grid grid-cols-2 gap-3">
             <SecondaryButton icon={FileSpreadsheet}>Export to Excel</SecondaryButton>
             <button
-              onClick={() => { onSendFlow({ flow: designFlow, standard, waterSystem }); onGoto("m2"); }}
+              onClick={() => onGoto("m2")}
               disabled={!calculated || designFlow == null}
               className={`flex items-center justify-center gap-2 rounded-2xl py-2.5 text-sm font-semibold text-white transition
                 ${(!calculated || designFlow == null) ? "bg-[#DCD5C2] cursor-not-allowed" : "bg-gradient-to-r from-[#4FB3A6] to-[#1F7A70] hover:brightness-105"}`}
@@ -595,30 +503,22 @@ function Module1({ DB, onSendFlow, onGoto }) {
   );
 }
 
-function Module2({ DB, incomingContext, onGoto }) {
-  const [flow, setFlow] = useState(incomingContext?.flow ?? 4.82);
-  const [context, setContext] = useState(incomingContext);
+function Module2({ DB, standard, waterSystem, designFlow, onGoto }) {
+  const [flow, setFlow] = useState(() => designFlow ?? 4.82);
   const [material, setMaterial] = useState("HDPE");
   const [velocityMode, setVelocityMode] = useState("Auto");
   const [manualVelocity, setManualVelocity] = useState(2.0);
   const [building, setBuilding] = useState("Hotel");
   const [result, setResult] = useState(null);
 
-  useEffect(() => {
-    if (incomingContext != null) {
-      setFlow(incomingContext.flow);
-      setContext(incomingContext);
-    }
-  }, [incomingContext]);
-
   const materialInfo = DB.materials.find(m => m.material === material);
 
-  const velocitySystem = context?.waterSystem === "Cold Water" ? "CW"
-    : context?.waterSystem === "Hot Water" ? "HW"
+  const velocitySystem = waterSystem === "Cold Water" ? "CW"
+    : waterSystem === "Hot Water" ? "HW"
     : null;
 
-  const velCriteria = (context && velocitySystem)
-    ? DB.velocity.find(v => v.standard === context.standard && v.building === building && v.system === velocitySystem)
+  const velCriteria = velocitySystem
+    ? DB.velocity.find(v => v.standard === standard && v.building === building && v.system === velocitySystem)
     : undefined;
 
   const calculate = () => {
@@ -648,7 +548,7 @@ function Module2({ DB, incomingContext, onGoto }) {
     setResult({ dn: chosen.dn, velocity: chosen.velocity, headLoss: hf, pressureLoss: pLoss, status });
   };
 
-  useEffect(() => { calculate(); }, [context, building, material, velocityMode]);
+  useEffect(() => { calculate(); }, [standard, waterSystem, building, material, velocityMode]);
 
   return (
     <div className="max-w-5xl mx-auto px-5 py-8">
@@ -662,15 +562,9 @@ function Module2({ DB, incomingContext, onGoto }) {
       <div className="grid md:grid-cols-3 gap-6">
         <Card className="md:col-span-1">
           <SectionTitle icon={Settings}>Pipe Configuration</SectionTitle>
-          {context ? (
-            <div className="mb-4 text-xs text-[#1F7A70] bg-[#EAF5F2] rounded-lg px-3 py-2">
-              Standard: <strong>{context.standard}</strong> · Water System: <strong>{context.waterSystem}</strong> (từ Module 1)
-            </div>
-          ) : (
-            <div className="mb-4 text-xs text-[#B8791A] bg-[#FEF3DE] rounded-lg px-3 py-2">
-              Chưa nhận Standard/Water System từ Module 1 — hãy quay lại Module 1 và bấm "Send to Pipe Design".
-            </div>
-          )}
+          <div className="mb-4 text-xs text-[#1F7A70] bg-[#EAF5F2] rounded-lg px-3 py-2">
+            Standard: <strong>{standard}</strong> · Water System: <strong>{waterSystem}</strong>
+          </div>
           <Field label="Flow (L/s)">
             <input
               type="number" step="0.01" value={flow}
@@ -865,11 +759,18 @@ function ImportBar({ onImport, usingCustom, onReset }) {
 
 function App() {
   const [screen, setScreen] = useState("m1");
-  const [sentContext, setSentContext] = useState(null);
   const [db, setDb] = useState(() => migrateStandardTypo(DEFAULT_DB));
   const [usingCustom, setUsingCustom] = useState(false);
 
-  // Đọc từ LocalStorage an toàn khi deploy thực tế
+  const [standard, setStandard] = useState("IPC");
+  const [buildingType, setBuildingType] = useState("Hotel");
+  const [systemType, setSystemType] = useState("");
+  const [waterSystem, setWaterSystem] = useState("Cold Water");
+  const [flushingType, setFlushingType] = useState("");
+  const [fixtures, setFixtures] = useState(() => buildInitialFixtureRows(DEFAULT_DB, "IPC", ""));
+  const [calculated, setCalculated] = useState(false);
+
+  // Khôi phục Database từ LocalStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem(IMPORTED_DB_STORAGE_KEY);
@@ -880,10 +781,114 @@ function App() {
           setUsingCustom(true);
         }
       }
-    } catch (e) {
-      console.warn("Không thể đọc LocalStorage:", e);
-    }
+    } catch (e) {}
   }, []);
+
+  const standardOptions = useMemo(() => {
+    const set = new Set();
+    db.fixtures.forEach(f => { if (f.standard) set.add(f.standard); });
+    return Array.from(set);
+  }, [db]);
+
+  useEffect(() => {
+    if (standardOptions.length > 0 && !standardOptions.includes(standard)) {
+      setStandard(standardOptions[0]);
+    }
+  }, [standardOptions]);
+
+  const systemTypeOptions = useMemo(() => {
+    const set = new Set();
+    db.fixtures.forEach(f => {
+      if (f.standard === standard && f.systemType != null && f.systemType !== "") set.add(f.systemType);
+    });
+    return Array.from(set);
+  }, [db, standard]);
+
+  useEffect(() => {
+    if (systemTypeOptions.length > 0 && !systemTypeOptions.includes(systemType)) {
+      setSystemType(systemTypeOptions[0]);
+    } else if (systemTypeOptions.length === 0 && systemType !== "") {
+      setSystemType("");
+    }
+  }, [systemTypeOptions]);
+
+  const flushingTypeOptions = useMemo(() => {
+    const set = new Set();
+    db.fu2flow.forEach(r => { if (r.standard === standard && r.type) set.add(r.type); });
+    return Array.from(set);
+  }, [db, standard]);
+
+  useEffect(() => {
+    if (flushingTypeOptions.length > 0 && !flushingTypeOptions.includes(flushingType)) {
+      setFlushingType(flushingTypeOptions[0]);
+    }
+  }, [flushingTypeOptions]);
+
+  const fixtureKey = f => `${f.standard}||${f.systemType ?? ""}||${f.name ?? ""}||${f.abbr ?? ""}`;
+
+  const availableFixtures = useMemo(() => {
+    return db.fixtures
+      .filter(f => f.standard === standard && (systemTypeOptions.length === 0 || f.systemType === systemType))
+      .map(f => ({ ...f, _key: fixtureKey(f) }));
+  }, [db, standard, systemType, systemTypeOptions]);
+
+  const fixtureByKey = useMemo(() => {
+    const map = {};
+    availableFixtures.forEach(f => { map[f._key] = f; });
+    return map;
+  }, [availableFixtures]);
+
+  const prevKeyRef = useRef(`${standard}|${systemType}`);
+  useEffect(() => {
+    const key = `${standard}|${systemType}`;
+    if (prevKeyRef.current !== key) {
+      prevKeyRef.current = key;
+      setFixtures(buildInitialFixtureRows(db, standard, systemType));
+      setCalculated(false);
+    }
+  }, [standard, systemType]);
+
+  const isHotWaterIneligible = f => {
+    const a = (f.abbr || "").toString().toUpperCase();
+    return a.startsWith("WC") || a.startsWith("UR");
+  };
+
+  const { totalFU, missingFuKeys } = useMemo(() => {
+    let sum = 0;
+    const missing = [];
+    for (const row of fixtures) {
+      const fu = fixtureByKey[row.fixtureId];
+      if (!fu) continue;
+      let raw;
+      if (waterSystem === "Cold Water") {
+        raw = fu.fuCold;
+      } else if (isHotWaterIneligible(fu)) {
+        raw = 0;
+      } else {
+        raw = fu.fuHot;
+      }
+      if (raw === null || raw === undefined) {
+        missing.push(row.fixtureId);
+        continue;
+      }
+      sum += raw * (row.qty || 0);
+    }
+    return { totalFU: missing.length > 0 ? null : sum, missingFuKeys: missing };
+  }, [fixtures, fixtureByKey, waterSystem]);
+
+  const designFlow = useMemo(() => {
+    if (totalFU == null) return null;
+    return interpolate(db.fu2flow, standard, flushingType, totalFU);
+  }, [db, standard, flushingType, totalFU]);
+
+  const fuRange = useMemo(() => getFuRange(db.fu2flow, standard, flushingType), [db, standard, flushingType]);
+
+  const outOfRange = useMemo(() => {
+    if (totalFU == null || !fuRange) return null;
+    if (totalFU < fuRange.min) return "below";
+    if (totalFU > fuRange.max) return "above";
+    return null;
+  }, [totalFU, fuRange]);
 
   const handleImport = (newDb) => {
     const migrated = migrateStandardTypo(newDb);
@@ -912,14 +917,26 @@ function App() {
         onReset={handleReset}
       />
       {screen === "m1"
-        ? <Module1 DB={db} onSendFlow={setSentContext} onGoto={setScreen} />
-        : <Module2 DB={db} incomingContext={sentContext} onGoto={setScreen} />
+        ? <Module1
+            DB={db} onGoto={setScreen}
+            standard={standard} setStandard={setStandard}
+            buildingType={buildingType} setBuildingType={setBuildingType}
+            systemType={systemType} setSystemType={setSystemType}
+            waterSystem={waterSystem} setWaterSystem={setWaterSystem}
+            flushingType={flushingType} setFlushingType={setFlushingType}
+            fixtures={fixtures} setFixtures={setFixtures}
+            calculated={calculated} setCalculated={setCalculated}
+            standardOptions={standardOptions} systemTypeOptions={systemTypeOptions} flushingTypeOptions={flushingTypeOptions}
+            availableFixtures={availableFixtures} totalFU={totalFU} missingFuKeys={missingFuKeys}
+            designFlow={designFlow} fuRange={fuRange} outOfRange={outOfRange}
+          />
+        : <Module2 DB={db} standard={standard} waterSystem={waterSystem} designFlow={designFlow} onGoto={setScreen} />
       }
     </div>
   );
 }
 
-// Mount React App
+// Render ứng dụng
 const rootElement = document.getElementById("root");
 const root = ReactDOM.createRoot(rootElement);
 root.render(<App />);
