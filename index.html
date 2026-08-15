@@ -4,6 +4,14 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Pipe Design Assistant</title>
+<!-- 
+  LƯU Ý KHI DEPLOY LÊN GITHUB PAGES / VERCEL:
+  1. File HTML này đã được tối ưu để chạy hoàn toàn tĩnh, bạn chỉ cần up file này lên repo GitHub hoặc kéo thả vào Vercel là chạy được ngay.
+  2. Bắt buộc: Vào trang quản trị Supabase -> Authentication -> URL Configuration. Hãy thêm Domain link trang web của bạn (trên Github Pages/Vercel) vào mục "Site URL" và "Redirect URLs" để chức năng Đăng Nhập/Đăng Ký hoạt động không bị lỗi CORS.
+  3. Để tính năng thu thập dữ liệu người dùng (dưới đây) hoạt động, bạn cần tạo thêm 2 table trong Supabase Database:
+     - Table: 'profiles' (gồm cột: id, email, created_at)
+     - Table: 'user_activity' (gồm cột: id, email, action, details (kiểu JSON), created_at)
+-->
 <!-- React & ReactDOM -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -23,6 +31,7 @@
 const { useState, useMemo, useRef, useEffect } = React;
 
 // Thư viện Supabase & Cấu hình Dùng thử
+// Khuyến nghị: Thay đổi SUPABASE_URL và SUPABASE_ANON_KEY của dự án thực tế để bảo mật
 const SUPABASE_URL = "https://wmzooetuftsfdqonktzg.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_k2pLpEZI2P-6zjsmNp0idA_jKroImfk";
 const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
@@ -125,6 +134,16 @@ function AuthForm({ onLoginSuccess }) {
       if (isSignUp) {
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
+        
+        // Tự động thu thập email người dùng đăng ký vào bảng 'profiles'
+        if (data?.user) {
+          try {
+             await supabase.from('profiles').insert([{ id: data.user.id, email: email, created_at: new Date().toISOString() }]);
+          } catch(errProfile) {
+             console.log("Lỗi tạo profile:", errProfile);
+          }
+        }
+        
         setInfoMsg("Đăng ký thành công! Bạn có thể Đăng nhập ngay bây giờ.");
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -366,7 +385,7 @@ function buildInitialFixtureRows(db, seedStandard, seedSystemType) {
   return [findFirst(f => (f.abbr || "").toString().toUpperCase().startsWith("WC")), findFirst(f => (f.name || "").toLowerCase().includes("basin")), findFirst(f => (f.name || "").toLowerCase().includes("shower")), findFirst(f => (f.abbr || "").toString().toUpperCase().startsWith("UR"))].filter(Boolean);
 }
 
-function Module1({ DB, onGoto, onExportExcel, standard, setStandard, buildingType, setBuildingType, systemType, setSystemType, waterSystem, setWaterSystem, flushingType, setFlushingType, fixtures, setFixtures, calculated, setCalculated, standardOptions, systemTypeOptions, flushingTypeOptions, availableFixtures, totalFU, missingFuKeys, designFlow, fuRange, outOfRange }) {
+function Module1({ DB, onGoto, onExportExcel, standard, setStandard, buildingType, setBuildingType, systemType, setSystemType, waterSystem, setWaterSystem, flushingType, setFlushingType, fixtures, setFixtures, calculated, setCalculated, standardOptions, systemTypeOptions, flushingTypeOptions, availableFixtures, totalFU, missingFuKeys, designFlow, fuRange, outOfRange, logActivity }) {
   const updateQty = (idx, qty) => { const copy = [...fixtures]; copy[idx] = { ...copy[idx], qty: Math.max(0, parseInt(qty) || 0) }; setFixtures(copy); setCalculated(false); };
   const removeRow = idx => { setFixtures(fixtures.filter((_, i) => i !== idx)); setCalculated(false); };
   const addRow = () => { const used = new Set(fixtures.map(f => f.fixtureId)); const next = availableFixtures.find(f => !used.has(f._key)) || availableFixtures[0]; if (next) setFixtures([...fixtures, { fixtureId: next._key, qty: 1 }]); setCalculated(false); };
@@ -400,7 +419,13 @@ function Module1({ DB, onGoto, onExportExcel, standard, setStandard, buildingTyp
               <button onClick={addRow} className="w-full mt-2 flex items-center justify-center gap-1.5 text-sm font-medium text-[#1F7A70] border border-dashed border-[#1F7A70]/40 rounded-xl py-2"><Plus size={15} /> Add New Fixture</button>
             </div>
           </Card>
-          <PrimaryButton icon={Gauge} disabled={fixtures.length === 0} onClick={() => setCalculated(true)}>Calculate</PrimaryButton>
+          
+          <PrimaryButton icon={Gauge} disabled={fixtures.length === 0} onClick={() => {
+            setCalculated(true);
+            // Kích hoạt thu thập dữ liệu người dùng khi tính toán Demand
+            if (logActivity) logActivity("calculate_demand", { standard, buildingType, waterSystem, totalFU, designFlow });
+          }}>Calculate</PrimaryButton>
+          
           <Card>
             <SectionTitle icon={TrendingUp}>Calculation Results</SectionTitle>
             <div className="grid grid-cols-2 gap-4">
@@ -418,7 +443,7 @@ function Module1({ DB, onGoto, onExportExcel, standard, setStandard, buildingTyp
   );
 }
 
-function Module2({ DB, standard, waterSystem, onGoto, onExportExcel, material, setMaterial, velocityMode, setVelocityMode, manualVelocity, setManualVelocity, building, setBuilding, result, flow, setFlowOverride, velocitySystem, velCriteria, onCalculate }) {
+function Module2({ DB, standard, waterSystem, onGoto, onExportExcel, material, setMaterial, velocityMode, setVelocityMode, manualVelocity, setManualVelocity, building, setBuilding, result, flow, setFlowOverride, velocitySystem, velCriteria, onCalculate, logActivity }) {
   return (
     <div className="max-w-5xl mx-auto px-5 py-8">
       <div className="flex items-center justify-between mb-2">
@@ -440,7 +465,11 @@ function Module2({ DB, standard, waterSystem, onGoto, onExportExcel, material, s
           )}
         </Card>
         <div className="md:col-span-2 space-y-6">
-          <PrimaryButton icon={Gauge} onClick={onCalculate}>Calculate Now</PrimaryButton>
+          <PrimaryButton icon={Gauge} onClick={() => {
+            onCalculate();
+            // Kích hoạt thu thập dữ liệu người dùng khi tính toán Pipe Design
+            if (logActivity) logActivity("calculate_pipe", { material, flow, manualVelocity, building, velocityMode });
+          }}>Calculate Now</PrimaryButton>
           <Card>
             <SectionTitle icon={Ruler}>Design Results</SectionTitle>
             {result?.notFound ? <div className="text-sm text-[#C13A3A]">No suitable pipe size found.</div> : (
@@ -593,6 +622,23 @@ function App() {
   const [result, setResult] = useState(null);
   const [flowOverride, setFlowOverride] = useState(null);
 
+  // Hàm thu thập dữ liệu người dùng lưu vào Supabase
+  const logActivityToSupabase = async (action, details) => {
+    if (!supabase || !user) return;
+    try {
+      await supabase.from('user_activity').insert([
+        { 
+          email: user.email, 
+          action: action, 
+          details: JSON.stringify(details), 
+          created_at: new Date().toISOString() 
+        }
+      ]);
+    } catch (err) {
+      console.error("Supabase log error:", err);
+    }
+  };
+
   // Khôi phục phiên Supabase
   useEffect(() => {
     if (!supabase) {
@@ -725,6 +771,7 @@ function App() {
             standardOptions={standardOptions} systemTypeOptions={systemTypeOptions} flushingTypeOptions={flushingTypeOptions}
             availableFixtures={availableFixtures} totalFU={totalFU} missingFuKeys={missingFuKeys}
             designFlow={designFlow}
+            logActivity={logActivityToSupabase}
           />
         : <Module2
             DB={db} standard={standard} waterSystem={waterSystem} onGoto={setScreen} onExportExcel={handleExportExcel}
@@ -734,6 +781,7 @@ function App() {
             building={building} setBuilding={setBuilding}
             result={result} flow={flow} setFlowOverride={setFlowOverride}
             velocitySystem={velocitySystem} velCriteria={velCriteria} onCalculate={calculatePipeDesign}
+            logActivity={logActivityToSupabase}
           />
       }
     </div>
