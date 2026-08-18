@@ -100,7 +100,9 @@ function AuthForm({ onLoginSuccess }) {
         // Tự động thu thập email người dùng đăng ký vào bảng 'profiles'
         if (data?.user) {
           try {
-             await supabase.from('profiles').insert([{ id: data.user.id, email: email, created_at: new Date().toISOString() }]);
+             // FIX: bảng thật trên Supabase là "Profile" (viết hoa P), cột ID/Email (viết hoa) — không có cột created_at.
+            // Không set "Trial expires at" ở đây -> để trống -> checkUserTrial() tự fallback về mặc định TRIAL_DAYS ngày.
+            await supabase.from('Profile').insert([{ ID: data.user.id, Email: email }]);
           } catch(errProfile) {
              console.log("Lỗi tạo profile:", errProfile);
           }
@@ -1695,24 +1697,28 @@ export default function App() {
   }, []);
   // FIX (theo yêu cầu): thêm khả năng ADMIN GIA HẠN qua Supabase, KHÔNG đổi hành vi mặc định.
   // Mặc định vẫn tính hạn = created_at + TRIAL_DAYS (giống hệt code cũ, không ảnh hưởng user cũ).
-  // Nếu admin set cột profiles.trial_expires_at (Table Editor) cho 1 user cụ thể, giá trị đó
+  // Nếu admin set cột "Trial expires at" (Table Editor, bảng "Profile") cho 1 user cụ thể, giá trị đó
   // ĐƯỢC ƯU TIÊN dùng thay cho công thức mặc định — đây là cách admin "kéo dài ngày" qua Supabase.
+  // LƯU Ý: tên bảng/cột thật trên Supabase có chữ hoa + khoảng trắng (xác nhận qua information_schema):
+  // bảng "Profile" (không phải "profiles"), cột "ID" (uuid), "Trial expires at" (date, không phải trial_expires_at).
   const checkUserTrial = async (userData) => {
     setUser(userData);
     const createdAt = new Date(userData.created_at);
     let expiresAt = new Date(createdAt.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000); // mặc định như cũ
 
     try {
-      const { data: profileRow } = await supabase
-        .from('profiles')
-        .select('trial_expires_at')
-        .eq('id', userData.id)
+      const { data: profileRow, error: profileErr } = await supabase
+        .from('Profile')
+        .select('"Trial expires at"')
+        .eq('ID', userData.id)
         .maybeSingle();
-      if (profileRow && profileRow.trial_expires_at) {
-        expiresAt = new Date(profileRow.trial_expires_at); // admin đã gia hạn -> dùng mốc này
+      if (profileErr) {
+        console.log("Lỗi đọc Profile (bảng/cột có thể chưa đúng hoặc bị RLS chặn):", profileErr);
+      } else if (profileRow && profileRow['Trial expires at']) {
+        expiresAt = new Date(profileRow['Trial expires at']); // admin đã gia hạn -> dùng mốc này
       }
     } catch (errProfile) {
-      console.log("Không đọc được trial_expires_at, dùng mặc định created_at+TRIAL_DAYS:", errProfile);
+      console.log("Không đọc được Trial expires at, dùng mặc định created_at+TRIAL_DAYS:", errProfile);
     }
 
     const now = new Date();
