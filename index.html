@@ -26,6 +26,10 @@ import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 // Đã bổ sung Lock, LogOut, User cho giao diện Auth
 import { Droplet, Settings, Plus, Trash2, ArrowRight, ArrowLeft, Gauge, Ruler, TrendingUp, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle, XCircle, Upload, RotateCcw, Search, Lock, LogOut, User } from "https://esm.sh/lucide-react@0.469.0?deps=react@18.3.1";
 // Cấu hình Supabase & Dùng thử
+const SUPABASE_URL = "https://wmzooetuftsfdqonktzg.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_k2pLpEZI2P-6zjsmNp0idA_jKroImfk";
+const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const TRIAL_DAYS = 14;
 /*
 CUSTOM-FIXTURE-HARDENED-V08-2026-08-16
 SOURCE: PipeDesignAssistant_CUSTOM_FIXTURE_FINAL.jsx (SHA256 5eb5c3a93a0fe6ccb1dda54542bd9183e5a68f2aaefbd98a9654e7a22363d1cc)
@@ -2377,7 +2381,8 @@ function AuthForm({ onLoginSuccess }) {
       </div>
     </div>
   );
-}function ExpiredTrialScreen({ user, onLogout }) {
+}
+function ExpiredTrialScreen({ user, onLogout }) {
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-[#EDE6D6] p-8 max-w-md w-full text-center">
@@ -2401,7 +2406,8 @@ function AuthForm({ onLoginSuccess }) {
       </div>
     </div>
   );
-}export default function App() {
+}
+export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [trialDaysLeft, setTrialDaysLeft] = useState(0);
