@@ -26,148 +26,20 @@ import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 // Đã bổ sung Lock, LogOut, User cho giao diện Auth
 import { Droplet, Settings, Plus, Trash2, ArrowRight, ArrowLeft, Gauge, Ruler, TrendingUp, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle, XCircle, Upload, RotateCcw, Search, Lock, LogOut, User } from "https://esm.sh/lucide-react@0.469.0?deps=react@18.3.1";
 // Cấu hình Supabase & Dùng thử
-/*
-CUSTOM-FIXTURE-HARDENED-V08-2026-08-16
-SOURCE: PipeDesignAssistant_CUSTOM_FIXTURE_FINAL.jsx (SHA256 5eb5c3a93a0fe6ccb1dda54542bd9183e5a68f2aaefbd98a9654e7a22363d1cc)
-
-MỤC TIÊU LƯỢT NÀY (không sửa logic Custom Fixture): loại bỏ HOÀN TOÀN cơ chế "self-export template"
-(APP_SOURCE_TEMPLATE_B64 / APP_HTML_TEMPLATE_B64) — 2 blob base64 nhúng snapshot mã nguồn CỐ ĐỊNH, được
-build thủ công mỗi lần sửa code. Đây là RỦI RO THẬT: nếu quên/sai lúc rebuild 2 blob này, nút "Update JSX
-Source Database" / "Export JSX" / "Export HTML" sẽ xuất ra CODE CŨ dù runtime đang chạy đã khác.
-
-ĐÃ XÓA HOÀN TOÀN: const APP_SOURCE_TEMPLATE_B64, const APP_HTML_TEMPLATE_B64, function b64DecodeUtf8(),
-getDatabaseSummary(), validateDbForPublish(), generateUniqueStorageKey(), buildExportedJsxSource(),
-buildExportedHtmlSource(), downloadTextFile(), function DatabaseToolsPanel() (3 nút "Update JSX Source
-Database"/"Export JSX"/"Export HTML"), dòng render <DatabaseToolsPanel/>.
-
-ĐÃ KIỂM CHỨNG GIỮ NGUYÊN (KHÔNG bị xóa nhầm — các hàm này nằm XEN GIỮA khối cũ, đã audit lại chính xác
-ranh giới từng hàm trước khi xóa): computeTotalFUForWaterSystem(), computeDirectFlowContribution(),
-generateCustomFixtureId(), computePipeResultForWaterSystem(), exportDesignToExcel(). Tính năng Import
-Database (ImportBar) không bị ảnh hưởng.
-
-KHÔNG CÒN bất kỳ cơ chế nào trong file có thể "tự xuất ra 1 file JSX/HTML mới" — một runtime JS đang chạy
-không thể tự đọc lại chính xác source .jsx gốc trừ khi nhúng dưới dạng snapshot (rủi ro lệch nếu quên đồng
-bộ). Từ nay, khi cần bản .jsx/.html mới, yêu cầu Claude xuất trực tiếp bằng present_files — luôn lấy từ
-đúng source đang chỉnh.
-
-KHÔNG có thay đổi nào về logic Custom Fixture/calculation/Excel/Standard switching trong lượt này.
-
-FIRST POINT OF FAILURE: các input FU Cold/FU Hot/Flow Cold/Flow Hot dùng <input type="number" step="0.1">.
-Chuẩn HTML5 number input CHỈ chấp nhận dấu CHẤM làm phân cách thập phân, bất kể locale hiển thị của trình
-duyệt/hệ điều hành. Nếu người dùng gõ dấu PHẨY (thói quen phổ biến, VD "1,5") — hành vi chuẩn của
-type="number" là coi giá trị không hợp lệ, khiến `e.target.value` không phản ánh đúng những gì người dùng
-thấy trên màn hình. Vì phần Quantity/FU Cold thường là số nguyên (không dấu phân cách) nên không lộ vấn đề,
-nhưng FU Hot/Flow (thường có phần thập phân) dễ gặp đúng tình huống này — khớp chính xác với triệu chứng
-"custom fixture xuất hiện trên UI nhưng calculation không cộng đúng / thiếu".
-
-ROOT CAUSE: input type="number" locale-dependent parsing, không phải lỗi field mapping/dependency/state
-architecture (đã audit nhiều lượt trước, các phần đó đều đúng).
-
-FIX:
-1. Đổi 8 input FU Cold/FU Hot/Flow Cold/Flow Hot (cả form Add và inline-edit dòng đã có) từ
-   type="number" sang type="text" inputMode="decimal" (giữ bàn phím số trên mobile, không còn bị trình
-   duyệt tự ý từ chối dấu phẩy).
-2. Thêm hàm parseDecimal() chấp nhận CẢ dấu chấm VÀ dấu phẩy làm phân cách thập phân, dùng thống nhất ở
-   validateCustomForm, addCustomFixtureRow (tạo row), và updateCustomFixtureRow (sửa dòng đã có).
-3. Thêm guard Number.isFinite(raw) trong computeTotalFUForWaterSystem/computeDirectFlowContribution —
-   vì input giờ là text (trình duyệt không còn tự chặn ký tự), giá trị có thể tạm thời NaN lúc đang gõ dở
-   khi sửa dòng đã Add (không qua validate) — coi NaN như "thiếu dữ liệu" thay vì lan NaN vào tổng.
-4. (Đã phát hiện thêm khi audit) addCustomFixtureRow/removeCustomRow/updateCustomFixtureRow trước đây đọc
-   `customFixtures` từ closure rồi set trực tiếp — cùng loại race condition đã sửa cho `customForm` ở V07
-   nhưng bị bỏ sót cho `customFixtures`. Đã đổi sang functional update `setCustomFixtures(prev => ...)`.
-
-Đã kiểm chứng bằng React 19 thật, ĐÚNG kịch bản nghi ngờ nhất (gõ "1,5" cho FU Hot): input giữ đúng "1,5",
-alert xác nhận "FU Hot=1.5" (parse đúng), Total FU = 19.70, Excel Total FU = [19.7 Cold, 4.5 Hot] đúng,
-Delete quay về 13.70 chính xác.
-
-ROOT CAUSE THẬT: cả 8 input/select của form Custom Fixture dùng `setCustomForm({ ...customForm, field: v })`
-— biến `customForm` đọc từ CLOSURE của lần render hiện tại. Nếu nhiều sự kiện input fire gần như đồng
-thời (gõ nhanh, dán nhiều ký tự, hoặc môi trường render có cơ chế batching mạnh hơn browser chuẩn), các
-handler có thể cùng đọc một `customForm` cũ rồi ghi đè lẫn nhau — MẤT giá trị của field đã nhập trước đó
-mà không có lỗi/cảnh báo nào. Đây khớp với triệu chứng "row Custom Fixture xuất hiện trên UI nhưng dữ liệu
-tính toán không đúng": field bị mất giá trị (VD fuCold rỗng) khiến computeTotalFUForWaterSystem coi là
-missing, không cộng vào Total FU — không phải do sai field mapping (đã audit lại toàn bộ, field mapping
-đúng 100%) hay do dependency graph (đã audit nhiều lần, đúng 100%).
-
-FIX: đổi toàn bộ 8 onChange handler sang FUNCTIONAL setState — `setCustomForm(prev => ({...prev, field: v}))`
-— luôn đọc đúng giá trị MỚI NHẤT tại thời điểm update thực thi, loại bỏ hoàn toàn race condition trên. Thêm
-`onInput` song song `onChange` cho cả 8 field làm dự phòng (không đổi logic, chỉ tăng khả năng bắt được sự
-kiện nếu môi trường chạy code xử lý sự kiện khác chuẩn browser).
-
-Đã kiểm chứng bằng React 19 thật, kịch bản "gõ dồn dập không đợi giữa các field" (mô phỏng đúng race
-condition khả nghi): TẤT CẢ field giữ đúng giá trị, Total FU = 19.70 chính xác (baseline 13.7 + custom
-qty2×FUCold3=6). Click Add Fixture thật (không inject customFixtures) → Calculate → Excel → Delete →
-Standard switching đều PASS (xem báo cáo đầy đủ).
-KHÔNG CÓ SOURCE MỚI được upload ở lượt V06 này — dùng đúng V05 tự giao trước đó.
-
-FIX THẬT (đơn giản hoá đúng yêu cầu): đổi tên biến dẫn xuất `fixtures` (= [...dbFixtures, ...customFixtures])
-thành `allFixtures` DUY NHẤT xuyên suốt App/Module1/exportDesignToExcel — không còn 2 tên biến khác nhau
-cho cùng 1 khái niệm. Trong lúc đổi tên, PHÁT HIỆN VÀ SỬA 1 BUG THẬT: prop truyền xuống Module1 dùng key
-`fixtures={allFixtures}` (tên key vẫn "fixtures") trong khi Module1 destructuring đã đổi sang tìm prop tên
-`allFixtures` — TÊN PROP KHÔNG KHỚP, khiến Module1 nhận `allFixtures = undefined`. Đã sửa thành
-`allFixtures={allFixtures}` ở App và xác nhận lại bằng React 19 thật: TEST 1 (baseline=13.70), TEST 2
-(Custom qty=2,FUCold=3 -> 19.70), TEST 3 (Export Excel có "TEST CUSTOM", Total FU Excel=19.7/4.5) đều PASS,
-Delete (click Trash2 thật) quay đúng 13.70.
-KHÔNG CÓ SOURCE MỚI được upload ở lượt yêu cầu V05 này — dùng đúng file V04 tự giao trước đó (đã báo rõ,
-đúng theo yêu cầu, không tự ý lấy bản khác giả định là mới).
-
-PART 4 (audit state overwrite) — đã liệt kê đủ 8 vị trí setDbFixtures/setCustomFixtures: 4 hàm đầu chỉ
-chạm dbFixtures, 3 hàm tiếp chỉ chạm customFixtures, effect Standard switching (dòng ~1843) chỉ chạm
-dbFixtures — KHÔNG tìm thấy state overwrite nào giữa 2 nhóm.
-
-ROOT CAUSE khả năng cao nhất (dựa trên chi tiết "Custom Fixture xuất hiện trên UI nhưng Calculate không
-tính" + toàn bộ test trước đó luôn dừng ở validate thất bại): khi validateCustomForm() trả lỗi, form
-KHÔNG đóng, vẫn hiển thị nguyên dữ liệu người dùng vừa gõ trên màn hình — dễ nhầm là "đã thêm thành công"
-trong khi addCustomFixtureRow() đã return sớm, CHƯA từng gọi setCustomFixtures().
-
-FIX V05: thêm window.alert() xác nhận rõ ràng, chặn tương tác, cho CẢ 2 trường hợp — thành công (chỉ hiện
-SAU KHI setCustomFixtures đã thực sự được gọi) và thất bại (hiện lý do lỗi cụ thể) — loại trừ dứt điểm khả
-năng nhầm lẫn giữa 2 trạng thái này.
-
-THAY ĐỔI KIẾN TRÚC (không chỉ trace/log nữa): tách VẬT LÝ `fixtures` (1 mảng chung dùng discriminator
-`row.type` để phân biệt DB/Custom) thành 2 state React RIÊNG BIỆT:
-  - dbFixtures  : chỉ chứa fixture Database ({fixtureId, qty})
-  - customFixtures : chỉ chứa fixture người dùng tự khai ({id, type:"custom", name, abbr, qty, ...})
-`fixtures` giờ là giá trị DẪN XUẤT = [...dbFixtures, ...customFixtures], dùng cho toàn bộ tính toán/
-Module2/Excel export y hệt trước (không đổi interface của các hàm downstream).
-
-Lý do: effect đổi Standard/SystemType trước đây dùng chung 1 setFixtures + filter(r => r.type==="custom")
-để bảo vệ custom fixture — đúng về logic nhưng vẫn phụ thuộc vào việc filter không bao giờ sai. Kiến trúc
-mới loại bỏ hoàn toàn phụ thuộc đó: effect đổi Standard giờ CHỈ nhận setDbFixtures, không hề có tham chiếu
-tới setCustomFixtures — về mặt kiến trúc KHÔNG THỂ ảnh hưởng tới customFixtures dù logic remap có lỗi gì.
-
-Đồng thời phát hiện và sửa 1 bug thật trong lúc refactor: dòng Quantity của custom fixture trước đây gọi
-nhầm `updateQty` (hàm dành cho DB fixture, thao tác trên index của mảng DB) thay vì `updateCustomFixtureRow`
-— trong kiến trúc 1-mảng-chung cũ, việc này vô tình vẫn đúng vì cùng chỉ số index, nhưng tiềm ẩn rủi ro
-thật khi 2 mảng tách rời. Đã sửa dùng đúng `updateCustomFixtureRow(idx, {qty})`.
-
-Đã kiểm chứng bằng React 19 thật (click thật, không phải inject): Add New Fixture (DB)/Delete (DB)/
-Export Excel/Delete Custom (click Trash2) đều PASS, Total FU tính đúng, quay đúng baseline sau xoá.
-Standard switching (thuật toán, dữ liệu DB thật): dbFixtures giữ đúng qty, customFixtures không hề bị
-đụng qua toàn bộ chu kỳ IPC->BS EN->QCVN->AS NZS->IPC.
-*/
-
-// STEP 24 FIX — `window.storage` là API riêng của môi trường sandbox Claude, KHÔNG tồn tại trên browser
-// thật (VD sau khi Export HTML rồi deploy lên Vercel/GitHub Pages). Toàn bộ lời gọi `window.storage.*`
-// trong file này ĐÃ được bọc trong try/catch từ trước (Step B1/B2/9/10) nên KHÔNG throw uncaught trên
-// browser thật — nhưng vì API không tồn tại, tính năng "lưu database cá nhân qua lần reload" sẽ luôn
-// âm thầm thất bại trên browser thật (không crash, nhưng cũng không hoạt động).
-// Sửa triệt để: nếu `window.storage` chưa tồn tại (browser thật), tự động cấp 1 bản thay thế dùng
-// `localStorage` với cùng interface (get/set/delete/list, đều async để tương thích lời gọi `await` hiện có).
-// Nếu `window.storage` đã tồn tại sẵn (đúng môi trường Claude sandbox), đoạn này KHÔNG làm gì cả — không
-// ghi đè, không phá vỡ hành vi JSX development hiện tại.
+const SUPABASE_URL = "https://wmzooetuftsfdqonktzg.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_k2pLpEZI2P-6zjsmNp0idA_jKroImfk";
+const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const TRIAL_DAYS = 14;
+// Tự động chuyển localStorage khi chạy ngoài sandbox
 (function installBrowserStorageShim() {
   if (typeof window === "undefined") return;
   if (window.storage && typeof window.storage.get === "function") return; // đã có sẵn (Claude sandbox) -> không đụng vào
-
   const PREFIX = "pda_storage__";
   const keyFor = (key, shared) => PREFIX + (shared ? "shared__" : "personal__") + key;
-
   window.storage = {
     async get(key, shared) {
       const raw = window.localStorage.getItem(keyFor(key, shared));
       if (raw === null || raw === undefined) {
-        // Giữ đúng hành vi gốc: key không tồn tại -> throw (mọi nơi gọi .get() trong app đều đã bọc try/catch).
         throw new Error("Key not found: " + key);
       }
       return { key, value: raw, shared: !!shared };
@@ -177,7 +49,6 @@ Standard switching (thuật toán, dữ liệu DB thật): dbFixtures giữ đú
         window.localStorage.setItem(keyFor(key, shared), String(value));
         return { key, value, shared: !!shared };
       } catch (e) {
-        // VD Safari Private Mode chặn localStorage -> không throw ra ngoài, trả null như tài liệu API gốc.
         return null;
       }
     },
@@ -204,51 +75,142 @@ Standard switching (thuật toán, dữ liệu DB thật): dbFixtures giữ đú
     },
   };
 })();
-
 // === DEFAULT_DB_START ===
 const DEFAULT_DB = {"pipeSizes": [{"material": "PPR", "dn": "DN15", "od": 20, "id": 14.4}, {"material": "PPR", "dn": "DN20", "od": 25, "id": 18}, {"material": "PPR", "dn": "DN25", "od": 32, "id": 23.2}, {"material": "PPR", "dn": "DN32", "od": 40, "id": 29}, {"material": "PPR", "dn": "DN40", "od": 50, "id": 36.2}, {"material": "PPR", "dn": "DN50", "od": 63, "id": 45.8}, {"material": "PPR", "dn": "DN65", "od": 75, "id": 54.4}, {"material": "PPR", "dn": "DN80", "od": 90, "id": 65.4}, {"material": "PPR", "dn": "DN100", "od": 110, "id": 79.8}, {"material": "PPR", "dn": "DN125", "od": 125, "id": 90.8}, {"material": "PPR", "dn": "DN150", "od": 160, "id": 116.2}, {"material": "PPR", "dn": "DN200", "od": 200, "id": 145.2}, {"material": "HDPE", "dn": "DN20", "od": 20, "id": 16.4}, {"material": "HDPE", "dn": "DN25", "od": 25, "id": 20.5}, {"material": "HDPE", "dn": "DN32", "od": 32, "id": 26.2}, {"material": "HDPE", "dn": "DN40", "od": 40, "id": 32.7}, {"material": "HDPE", "dn": "DN50", "od": 50, "id": 40.9}, {"material": "HDPE", "dn": "DN65", "od": 63, "id": 51.5}, {"material": "HDPE", "dn": "DN80", "od": 90, "id": 73.6}, {"material": "HDPE", "dn": "DN100", "od": 110, "id": 90}, {"material": "HDPE", "dn": "DN125", "od": 140, "id": 114.5}, {"material": "HDPE", "dn": "DN150", "od": 160, "id": 130.9}, {"material": "HDPE", "dn": "DN200", "od": 200, "id": 163.6}, {"material": "Copper", "dn": "DN15", "od": 15.88, "id": 13.84}, {"material": "Copper", "dn": "DN20", "od": 22.23, "id": 19.95}, {"material": "Copper", "dn": "DN25", "od": 28.58, "id": 26.04}, {"material": "Copper", "dn": "DN32", "od": 34.93, "id": 32.13}, {"material": "Copper", "dn": "DN40", "od": 41.28, "id": 38.24}, {"material": "Copper", "dn": "DN50", "od": 53.98, "id": 50.42}, {"material": "Copper", "dn": "DN65", "od": 66.68, "id": 62.62}, {"material": "Copper", "dn": "DN80", "od": 79.38, "id": 74.8}, {"material": "Copper", "dn": "DN100", "od": 104.78, "id": 99.2}, {"material": "Copper", "dn": "DN125", "od": 130.18, "id": 123.82}, {"material": "Copper", "dn": "DN150", "od": 155.58, "id": 148.46}, {"material": "Inox", "dn": "DN15", "od": 21.3, "id": 17.08}, {"material": "Inox", "dn": "DN20", "od": 26.7, "id": 22.48}, {"material": "Inox", "dn": "DN25", "od": 33.4, "id": 27.86}, {"material": "Inox", "dn": "DN32", "od": 42.2, "id": 36.66}, {"material": "Inox", "dn": "DN40", "od": 48.3, "id": 42.76}, {"material": "Inox", "dn": "DN50", "od": 60.3, "id": 54.76}, {"material": "Inox", "dn": "DN65", "od": 73, "id": 66.9}, {"material": "Inox", "dn": "DN80", "od": 88.9, "id": 82.8}, {"material": "Inox", "dn": "DN100", "od": 114.3, "id": 108.2}, {"material": "Inox", "dn": "DN125", "od": 141.3, "id": 134.5}, {"material": "Inox", "dn": "DN150", "od": 168.3, "id": 161.5}, {"material": "Inox", "dn": "DN200", "od": 219.1, "id": 211.58}], "materials": [{"material": "HDPE", "c": 150, "roughness": 0.007}, {"material": "PPR", "c": 150, "roughness": 0.006}, {"material": "Copper", "c": 140, "roughness": 0.0015}, {"material": "Inox", "c": 120, "roughness": 0.045}], "fixtures": [{"standard": "IPC", "systemType": null, "name": "WC -Water closet flushing cistern (private)", "abbr": "WCprc", "fuCold": 2.2, "fuHot": 0, "fuTotal": 2.2}, {"standard": "IPC", "systemType": null, "name": "WC - Water closet flushing valve (private)", "abbr": "WCprv", "fuCold": 6, "fuHot": 0, "fuTotal": 5}, {"standard": "IPC", "systemType": null, "name": "WC - Water closet flushing cistern (public)", "abbr": "WCpuc", "fuCold": 5, "fuHot": 0, "fuTotal": 5}, {"standard": "IPC", "systemType": null, "name": "WC - Water closet flushing valve (public)", "abbr": "WCpuv", "fuCold": 10, "fuHot": 0, "fuTotal": 5}, {"standard": "IPC", "systemType": null, "name": "UR - Urinal flushing valve (public-25mm)", "abbr": "URv25", "fuCold": 10, "fuHot": 0, "fuTotal": 5}, {"standard": "IPC", "systemType": null, "name": "UR - Urinal flushing valve (public-20mm)", "abbr": "URv20", "fuCold": 5, "fuHot": 0, "fuTotal": 5}, {"standard": "IPC", "systemType": null, "name": "UR - Urinal flushing tank (public)", "abbr": "URc", "fuCold": 3, "fuHot": 0, "fuTotal": 3}, {"standard": "IPC", "systemType": null, "name": "Bd - Bidet (private)", "abbr": "Bd", "fuCold": 1.5, "fuHot": 0, "fuTotal": 2}, {"standard": "IPC", "systemType": null, "name": "B - Basin (private)", "abbr": "Bpr", "fuCold": 0.5, "fuHot": 0.5, "fuTotal": 0.7}, {"standard": "IPC", "systemType": null, "name": "B - Basin (public)", "abbr": "Bpu", "fuCold": 1.5, "fuHot": 1.5, "fuTotal": 2}, {"standard": "IPC", "systemType": null, "name": "Bth - Bath tub (private)", "abbr": "BTHpr", "fuCold": 1, "fuHot": 1, "fuTotal": 1.4}, {"standard": "IPC", "systemType": null, "name": "Bth - Bath tub (public)", "abbr": "BTHpu", "fuCold": 3, "fuHot": 3, "fuTotal": 4}, {"standard": "IPC", "systemType": null, "name": "Shr - Shower head (private)", "abbr": "SHRpr", "fuCold": 1, "fuHot": 1, "fuTotal": 1.4}, {"standard": "IPC", "systemType": null, "name": "Shr - Shower head (public)", "abbr": "SHRpu", "fuCold": 3, "fuHot": 3, "fuTotal": 4}, {"standard": "IPC", "systemType": null, "name": "SK - Kitchen sink (private)", "abbr": "SKpr", "fuCold": 1, "fuHot": 1, "fuTotal": 1.4}, {"standard": "IPC", "systemType": null, "name": "SK - Kitchen sink (restaurant)", "abbr": "KS", "fuCold": 3, "fuHot": 3, "fuTotal": 4}, {"standard": "IPC", "systemType": null, "name": "SK - Service Sink (office)", "abbr": "SKof", "fuCold": 2.25, "fuHot": 2.25, "fuTotal": 3}, {"standard": "IPC", "systemType": null, "name": "WM - Clothes-Washing machine (private-8lb)", "abbr": "WMpr", "fuCold": 1, "fuHot": 1, "fuTotal": 1.4}, {"standard": "IPC", "systemType": null, "name": "WM - Clothes-Washing machine (public-15lb)", "abbr": "WMpu", "fuCold": 3, "fuHot": 3, "fuTotal": 4}, {"standard": "IPC", "systemType": null, "name": "DW - Dishwashing machine  (private)", "abbr": "DW", "fuCold": 1.4, "fuHot": 1.4, "fuTotal": 1.4}, {"standard": "BS EN", "systemType": "Medium", "name": "WC -Water closet", "abbr": "WC", "fuCold": 2, "fuHot": null, "fuTotal": 2}, {"standard": "BS EN", "systemType": "Medium", "name": "UR - Urinal", "abbr": "Ur", "fuCold": 2, "fuHot": null, "fuTotal": 2}, {"standard": "BS EN", "systemType": "Medium", "name": "B - Wash Basin DN15/ Tap", "abbr": "B", "fuCold": 2, "fuHot": 2, "fuTotal": 2}, {"standard": "BS EN", "systemType": "Medium", "name": "Bth - Bath tap DN15", "abbr": "Bth", "fuCold": 8, "fuHot": 8, "fuTotal": 8}, {"standard": "BS EN", "systemType": "Medium", "name": "Bth - Bath tap DN20", "abbr": "Bth", "fuCold": 11, "fuHot": 11, "fuTotal": 11}, {"standard": "BS EN", "systemType": "Medium", "name": "Shr - Shower head", "abbr": "Shr", "fuCold": 3, "fuHot": 3, "fuTotal": 3}, {"standard": "BS EN", "systemType": "Medium", "name": "SK - Sink Tap DN15", "abbr": "SK", "fuCold": 5, "fuHot": 5, "fuTotal": 5}, {"standard": "BS EN", "systemType": "Medium", "name": "SK - Sink Tap DN20", "abbr": "SK", "fuCold": 7, "fuHot": 7, "fuTotal": 7}, {"standard": "BS EN", "systemType": "Medium", "name": "WM - Washing machine", "abbr": "WM", "fuCold": 2, "fuHot": 2, "fuTotal": 2}, {"standard": "BS EN", "systemType": "Medium", "name": "DW - Dishwashing machine  (private)", "abbr": "DW", "fuCold": 2, "fuHot": 2, "fuTotal": 2}, {"standard": "BS EN", "systemType": "Small", "name": "WC -Water closet", "abbr": "WC", "fuCold": 1, "fuHot": null, "fuTotal": 1}, {"standard": "BS EN", "systemType": "Small", "name": "UR - Urinal", "abbr": "Ur", "fuCold": 1, "fuHot": null, "fuTotal": 1}, {"standard": "BS EN", "systemType": "Small", "name": "B - Wash Basin DN15/ Tap", "abbr": "B", "fuCold": 1, "fuHot": 1, "fuTotal": 1}, {"standard": "BS EN", "systemType": "Small", "name": "Bth - Bath tap DN15", "abbr": "Bth", "fuCold": 4, "fuHot": 4, "fuTotal": 4}, {"standard": "BS EN", "systemType": "Small", "name": "Bth - Bath tap DN20", "abbr": "Bth", "fuCold": null, "fuHot": null, "fuTotal": null}, {"standard": "BS EN", "systemType": "Small", "name": "Shr - Shower head", "abbr": "Shr", "fuCold": 2, "fuHot": 2, "fuTotal": 2}, {"standard": "BS EN", "systemType": "Small", "name": "SK - Sink Tap DN15", "abbr": "SK", "fuCold": 2, "fuHot": 2, "fuTotal": 2}, {"standard": "BS EN", "systemType": "Small", "name": "SK - Sink Tap DN20", "abbr": "SK", "fuCold": null, "fuHot": null, "fuTotal": null}, {"standard": "BS EN", "systemType": "Small", "name": "WM - Washing machine", "abbr": "WM", "fuCold": 2, "fuHot": 2, "fuTotal": 2}, {"standard": "BS EN", "systemType": "Small", "name": "DW - Dishwashing machine  (private)", "abbr": "DW", "fuCold": 2, "fuHot": 2, "fuTotal": 2}, {"standard": "BS EN", "systemType": "Large", "name": "WC -Water closet", "abbr": "WC", "fuCold": 1, "fuHot": null, "fuTotal": 5}, {"standard": "BS EN", "systemType": "Large", "name": "UR - Urinal", "abbr": "Ur", "fuCold": 1, "fuHot": null, "fuTotal": 5}, {"standard": "BS EN", "systemType": "Large", "name": "B - Wash Basin DN15/ Tap", "abbr": "B", "fuCold": 1, "fuHot": 1, "fuTotal": 4}, {"standard": "BS EN", "systemType": "Large", "name": "Bth - Bath tap DN15", "abbr": "Bth", "fuCold": 4, "fuHot": 4, "fuTotal": 16}, {"standard": "BS EN", "systemType": "Large", "name": "Bth - Bath tap DN20", "abbr": "Bth", "fuCold": null, "fuHot": null, "fuTotal": null}, {"standard": "BS EN", "systemType": "Large", "name": "Shr - Shower head", "abbr": "Shr", "fuCold": 2, "fuHot": 2, "fuTotal": 6}, {"standard": "BS EN", "systemType": "Large", "name": "SK - Sink Tap DN15", "abbr": "SK", "fuCold": 2, "fuHot": 2, "fuTotal": 10}, {"standard": "BS EN", "systemType": "Large", "name": "SK - Sink Tap DN20", "abbr": "SK", "fuCold": null, "fuHot": null, "fuTotal": null}, {"standard": "BS EN", "systemType": "Large", "name": "WM - Washing machine", "abbr": "WM", "fuCold": 2, "fuHot": 2, "fuTotal": 2}, {"standard": "BS EN", "systemType": "Large", "name": "DW - Dishwashing machine  (private)", "abbr": "DW", "fuCold": 2, "fuHot": 2, "fuTotal": 2}, {"standard": "QCVN", "systemType": null, "name": "WC -Water closet flushing cistern (private)", "abbr": "WCprc", "fuCold": 2.5, "fuHot": 0, "fuTotal": 2.5}, {"standard": "QCVN", "systemType": null, "name": "WC - Water closet flushing valve (private)", "abbr": "WCprv", "fuCold": 5, "fuHot": 0, "fuTotal": 5}, {"standard": "QCVN", "systemType": null, "name": "WC - Water closet flushing cistern (public)", "abbr": "WCpuc", "fuCold": 3, "fuHot": 0, "fuTotal": 3}, {"standard": "QCVN", "systemType": null, "name": "WC - Water closet flushing valve (public)", "abbr": "WCpuv", "fuCold": 7, "fuHot": 0, "fuTotal": 7}, {"standard": "QCVN", "systemType": null, "name": "UR - Urinal flushing valve (public-25mm)", "abbr": "URv25", "fuCold": 6, "fuHot": 0, "fuTotal": 6}, {"standard": "QCVN", "systemType": null, "name": "UR - Urinal flushing valve (public-20mm)", "abbr": "URv20", "fuCold": 5, "fuHot": 0, "fuTotal": 5}, {"standard": "QCVN", "systemType": null, "name": "UR - Urinal flushing tank (public)", "abbr": "URc", "fuCold": 4, "fuHot": 0, "fuTotal": 4}, {"standard": "QCVN", "systemType": null, "name": "Bd - Bidet (private)", "abbr": "Bd", "fuCold": 1, "fuHot": 0, "fuTotal": 1}, {"standard": "QCVN", "systemType": null, "name": "B - Basin (private)", "abbr": "Bpr", "fuCold": 1, "fuHot": 1, "fuTotal": 1}, {"standard": "QCVN", "systemType": null, "name": "B - Basin (public)", "abbr": "Bpu", "fuCold": 2, "fuHot": 2, "fuTotal": 2}, {"standard": "QCVN", "systemType": null, "name": "Bth - Bath tub (single)", "abbr": "BTHpr", "fuCold": 4, "fuHot": 4, "fuTotal": 4}, {"standard": "QCVN", "systemType": null, "name": "Bth - Bath tub (from 3 occupants)", "abbr": "BTHpu", "fuCold": 3.5, "fuHot": 3.5, "fuTotal": 3.5}, {"standard": "QCVN", "systemType": null, "name": "Shr - Shower head (private)", "abbr": "SHRpr", "fuCold": 2, "fuHot": 2, "fuTotal": 2}, {"standard": "QCVN", "systemType": null, "name": "Shr - Shower head (public)", "abbr": "SHRpu", "fuCold": 5, "fuHot": 5, "fuTotal": 5}, {"standard": "QCVN", "systemType": null, "name": "SK - Kitchen sink (private)", "abbr": "SKpr", "fuCold": 1.5, "fuHot": 1.5, "fuTotal": 1.5}, {"standard": "QCVN", "systemType": null, "name": "SK - Service Sink (office)", "abbr": "SKof", "fuCold": 1.5, "fuHot": 1.5, "fuTotal": 1.5}, {"standard": "QCVN", "systemType": null, "name": "WM - Clothes-Washing machine (private)", "abbr": "WMpr", "fuCold": 2.5, "fuHot": 2.5, "fuTotal": 2.5}, {"standard": "QCVN", "systemType": null, "name": "WM - Clothes-Washing machine   (from 3 occupants)", "abbr": "DW", "fuCold": 4, "fuHot": 4, "fuTotal": 4}, {"standard": "QCVN", "systemType": null, "name": "DW - Dishwashing machine  (single)", "abbr": "DW", "fuCold": 1.5, "fuHot": 1.5, "fuTotal": 1.5}, {"standard": "AS NZS", "systemType": null, "name": "WC -Water closet flushing cistern", "abbr": "WC", "fuCold": 2, "fuHot": null, "fuTotal": 2}, {"standard": "AS NZS", "systemType": null, "name": "Bth - Bath tub", "abbr": "BTH", "fuCold": 8, "fuHot": 4, "fuTotal": 8}, {"standard": "AS NZS", "systemType": null, "name": "B - Basin", "abbr": "B", "fuCold": 1, "fuHot": 1, "fuTotal": 1}, {"standard": "AS NZS", "systemType": null, "name": "Spray tap", "abbr": "St", "fuCold": 0.5, "fuHot": 0.5, "fuTotal": 0.5}, {"standard": "AS NZS", "systemType": null, "name": "Shr - Shower head", "abbr": "SHR", "fuCold": 2, "fuHot": 2, "fuTotal": 2}, {"standard": "AS NZS", "systemType": null, "name": "SK - Sink (standard tap)", "abbr": "SK", "fuCold": 3, "fuHot": 3, "fuTotal": 3}, {"standard": "AS NZS", "systemType": null, "name": "SK - Sink (aerator tap)", "abbr": "SK", "fuCold": 2, "fuHot": 2, "fuTotal": 2}, {"standard": "AS NZS", "systemType": null, "name": "LT - Laundry trough", "abbr": "LT", "fuCold": 3, "fuHot": 3, "fuTotal": 3}, {"standard": "AS NZS", "systemType": null, "name": "WM - Washing Machine/ Dishwasher", "abbr": "WM", "fuCold": 3, "fuHot": 2, "fuTotal": 3}, {"standard": "AS NZS", "systemType": null, "name": "WH - Main pressure water heater", "abbr": "WH", "fuCold": 8, "fuHot": null, "fuTotal": 8}, {"standard": "AS NZS", "systemType": null, "name": "HT - Hose tap (DN20)", "abbr": "HT", "fuCold": 8, "fuHot": null, "fuTotal": 8}, {"standard": "AS NZS", "systemType": null, "name": "HT - Hose tap (DN15)", "abbr": "HT", "fuCold": 4, "fuHot": null, "fuTotal": 4}], "fu2flow": [{"standard": "IPC", "type": "Flush tank", "fu": 1, "ls": 0.189}, {"standard": "IPC", "type": "Flush tank", "fu": 2, "ls": 0.315}, {"standard": "IPC", "type": "Flush tank", "fu": 3, "ls": 0.4095}, {"standard": "IPC", "type": "Flush tank", "fu": 4, "ls": 0.504}, {"standard": "IPC", "type": "Flush tank", "fu": 5, "ls": 0.5922000000000001}, {"standard": "IPC", "type": "Flush tank", "fu": 6, "ls": 0.6740999999999999}, {"standard": "IPC", "type": "Flush tank", "fu": 7, "ls": 0.7434000000000001}, {"standard": "IPC", "type": "Flush tank", "fu": 8, "ls": 0.8064}, {"standard": "IPC", "type": "Flush tank", "fu": 9, "ls": 0.8631}, {"standard": "IPC", "type": "Flush tank", "fu": 10, "ls": 0.9198}, {"standard": "IPC", "type": "Flush tank", "fu": 11, "ls": 0.9702000000000001}, {"standard": "IPC", "type": "Flush tank", "fu": 12, "ls": 1.008}, {"standard": "IPC", "type": "Flush tank", "fu": 13, "ls": 1.0395}, {"standard": "IPC", "type": "Flush tank", "fu": 14, "ls": 1.071}, {"standard": "IPC", "type": "Flush tank", "fu": 15, "ls": 1.1025}, {"standard": "IPC", "type": "Flush tank", "fu": 16, "ls": 1.134}, {"standard": "IPC", "type": "Flush tank", "fu": 17, "ls": 1.1592}, {"standard": "IPC", "type": "Flush tank", "fu": 18, "ls": 1.1844000000000001}, {"standard": "IPC", "type": "Flush tank", "fu": 19, "ls": 1.2096}, {"standard": "IPC", "type": "Flush tank", "fu": 20, "ls": 1.2348000000000001}, {"standard": "IPC", "type": "Flush tank", "fu": 25, "ls": 1.3545}, {"standard": "IPC", "type": "Flush tank", "fu": 30, "ls": 1.4679}, {"standard": "IPC", "type": "Flush tank", "fu": 35, "ls": 1.5687}, {"standard": "IPC", "type": "Flush tank", "fu": 40, "ls": 1.6569}, {"standard": "IPC", "type": "Flush tank", "fu": 45, "ls": 1.7450999999999999}, {"standard": "IPC", "type": "Flush tank", "fu": 50, "ls": 1.8333000000000002}, {"standard": "IPC", "type": "Flush tank", "fu": 60, "ls": 2.016}, {"standard": "IPC", "type": "Flush tank", "fu": 70, "ls": 2.205}, {"standard": "IPC", "type": "Flush tank", "fu": 80, "ls": 2.394}, {"standard": "IPC", "type": "Flush tank", "fu": 90, "ls": 2.583}, {"standard": "IPC", "type": "Flush tank", "fu": 100, "ls": 2.7405}, {"standard": "IPC", "type": "Flush tank", "fu": 120, "ls": 3.024}, {"standard": "IPC", "type": "Flush tank", "fu": 140, "ls": 3.3075}, {"standard": "IPC", "type": "Flush tank", "fu": 160, "ls": 3.591}, {"standard": "IPC", "type": "Flush tank", "fu": 180, "ls": 3.843}, {"standard": "IPC", "type": "Flush tank", "fu": 200, "ls": 4.095}, {"standard": "IPC", "type": "Flush tank", "fu": 225, "ls": 4.41}, {"standard": "IPC", "type": "Flush tank", "fu": 250, "ls": 4.725}, {"standard": "IPC", "type": "Flush tank", "fu": 275, "ls": 5.04}, {"standard": "IPC", "type": "Flush tank", "fu": 300, "ls": 5.355}, {"standard": "IPC", "type": "Flush tank", "fu": 400, "ls": 6.615}, {"standard": "IPC", "type": "Flush tank", "fu": 500, "ls": 7.812}, {"standard": "IPC", "type": "Flush tank", "fu": 750, "ls": 10.71}, {"standard": "IPC", "type": "Flush tank", "fu": 1000, "ls": 13.104}, {"standard": "IPC", "type": "Flush tank", "fu": 1250, "ls": 15.057}, {"standard": "IPC", "type": "Flush tank", "fu": 1500, "ls": 16.947}, {"standard": "IPC", "type": "Flush tank", "fu": 1750, "ls": 18.711}, {"standard": "IPC", "type": "Flush tank", "fu": 2000, "ls": 20.475}, {"standard": "IPC", "type": "Flush tank", "fu": 2500, "ls": 23.94}, {"standard": "IPC", "type": "Flush tank", "fu": 3000, "ls": 27.279}, {"standard": "IPC", "type": "Flush tank", "fu": 4000, "ls": 33.705}, {"standard": "IPC", "type": "Flush tank", "fu": 5000, "ls": 37.359}, {"standard": "IPC", "type": "Flush valve", "fu": 5, "ls": 0.946}, {"standard": "IPC", "type": "Flush valve", "fu": 6, "ls": 1.098}, {"standard": "IPC", "type": "Flush valve", "fu": 7, "ls": 1.249}, {"standard": "IPC", "type": "Flush valve", "fu": 8, "ls": 1.401}, {"standard": "IPC", "type": "Flush valve", "fu": 9, "ls": 1.552}, {"standard": "IPC", "type": "Flush valve", "fu": 10, "ls": 1.703}, {"standard": "IPC", "type": "Flush valve", "fu": 11, "ls": 1.754}, {"standard": "IPC", "type": "Flush valve", "fu": 12, "ls": 1.805}, {"standard": "IPC", "type": "Flush valve", "fu": 13, "ls": 1.855}, {"standard": "IPC", "type": "Flush valve", "fu": 14, "ls": 1.906}, {"standard": "IPC", "type": "Flush valve", "fu": 15, "ls": 1.956}, {"standard": "IPC", "type": "Flush valve", "fu": 16, "ls": 2.007}, {"standard": "IPC", "type": "Flush valve", "fu": 17, "ls": 2.057}, {"standard": "IPC", "type": "Flush valve", "fu": 18, "ls": 2.108}, {"standard": "IPC", "type": "Flush valve", "fu": 19, "ls": 2.158}, {"standard": "IPC", "type": "Flush valve", "fu": 20, "ls": 2.208}, {"standard": "IPC", "type": "Flush valve", "fu": 25, "ls": 2.397}, {"standard": "IPC", "type": "Flush valve", "fu": 30, "ls": 2.65}, {"standard": "IPC", "type": "Flush valve", "fu": 35, "ls": 2.776}, {"standard": "IPC", "type": "Flush valve", "fu": 40, "ls": 2.965}, {"standard": "IPC", "type": "Flush valve", "fu": 45, "ls": 3.092}, {"standard": "IPC", "type": "Flush valve", "fu": 50, "ls": 3.249}, {"standard": "IPC", "type": "Flush valve", "fu": 60, "ls": 3.47}, {"standard": "IPC", "type": "Flush valve", "fu": 70, "ls": 3.722}, {"standard": "IPC", "type": "Flush valve", "fu": 80, "ls": 3.943}, {"standard": "IPC", "type": "Flush valve", "fu": 90, "ls": 4.101}, {"standard": "IPC", "type": "Flush valve", "fu": 100, "ls": 4.29}, {"standard": "IPC", "type": "Flush valve", "fu": 120, "ls": 4.606}, {"standard": "IPC", "type": "Flush valve", "fu": 140, "ls": 4.922}, {"standard": "IPC", "type": "Flush valve", "fu": 160, "ls": 5.237}, {"standard": "IPC", "type": "Flush valve", "fu": 180, "ls": 5.489}, {"standard": "IPC", "type": "Flush valve", "fu": 200, "ls": 5.742}, {"standard": "IPC", "type": "Flush valve", "fu": 225, "ls": 6.025}, {"standard": "IPC", "type": "Flush valve", "fu": 250, "ls": 6.309}, {"standard": "IPC", "type": "Flush valve", "fu": 275, "ls": 6.593}, {"standard": "IPC", "type": "Flush valve", "fu": 300, "ls": 6.814}, {"standard": "IPC", "type": "Flush valve", "fu": 400, "ls": 8.013}, {"standard": "IPC", "type": "Flush valve", "fu": 500, "ls": 9.023}, {"standard": "IPC", "type": "Flush valve", "fu": 750, "ls": 11.168}, {"standard": "IPC", "type": "Flush valve", "fu": 1000, "ls": 13.124}, {"standard": "IPC", "type": "Flush valve", "fu": 1250, "ls": 15.079}, {"standard": "IPC", "type": "Flush valve", "fu": 1500, "ls": 16.973}, {"standard": "IPC", "type": "Flush valve", "fu": 1750, "ls": 18.74}, {"standard": "IPC", "type": "Flush valve", "fu": 2000, "ls": 20.507}, {"standard": "IPC", "type": "Flush valve", "fu": 2500, "ls": 23.974}, {"standard": "IPC", "type": "Flush valve", "fu": 3000, "ls": 27.319}, {"standard": "IPC", "type": "Flush valve", "fu": 4000, "ls": 33.125}, {"standard": "IPC", "type": "Flush valve", "fu": 5000, "ls": 37.413}, {"standard": "BS EN", "type": "Flush tank", "fu": 1, "ls": 0.1}, {"standard": "BS EN", "type": "Flush tank", "fu": 5, "ls": 0.2}, {"standard": "BS EN", "type": "Flush tank", "fu": 10, "ls": 0.3}, {"standard": "BS EN", "type": "Flush tank", "fu": 20, "ls": 0.44}, {"standard": "BS EN", "type": "Flush tank", "fu": 30, "ls": 0.56}, {"standard": "BS EN", "type": "Flush tank", "fu": 40, "ls": 0.7}, {"standard": "BS EN", "type": "Flush tank", "fu": 50, "ls": 0.77}, {"standard": "BS EN", "type": "Flush tank", "fu": 60, "ls": 0.9}, {"standard": "BS EN", "type": "Flush tank", "fu": 80, "ls": 1.06}, {"standard": "BS EN", "type": "Flush tank", "fu": 100, "ls": 1.25}, {"standard": "BS EN", "type": "Flush tank", "fu": 150, "ls": 1.68}, {"standard": "BS EN", "type": "Flush tank", "fu": 200, "ls": 2.1}, {"standard": "BS EN", "type": "Flush tank", "fu": 300, "ls": 2.8}, {"standard": "BS EN", "type": "Flush tank", "fu": 400, "ls": 3.53}, {"standard": "BS EN", "type": "Flush tank", "fu": 500, "ls": 4.1}, {"standard": "BS EN", "type": "Flush tank", "fu": 700, "ls": 5.25}, {"standard": "BS EN", "type": "Flush tank", "fu": 1000, "ls": 6.8}, {"standard": "BS EN", "type": "Flush tank", "fu": 1500, "ls": 9.2}, {"standard": "BS EN", "type": "Flush tank", "fu": 2000, "ls": 11.2}, {"standard": "BS EN", "type": "Flush tank", "fu": 3000, "ls": 15.2}, {"standard": "BS EN", "type": "Flush tank", "fu": 4000, "ls": 18.5}, {"standard": "BS EN", "type": "Flush tank", "fu": 5000, "ls": 22}, {"standard": "BS EN", "type": "Flush tank", "fu": 6000, "ls": 25.2}, {"standard": "BS EN", "type": "Flush tank", "fu": 7000, "ls": 28}, {"standard": "BS EN", "type": "Flush tank", "fu": 7700, "ls": 30}, {"standard": "BS EN", "type": "Flush valve", "fu": 1, "ls": 0.15}, {"standard": "BS EN", "type": "Flush valve", "fu": 5, "ls": 0.2}, {"standard": "BS EN", "type": "Flush valve", "fu": 10, "ls": 0.3}, {"standard": "BS EN", "type": "Flush valve", "fu": 20, "ls": 0.44}, {"standard": "BS EN", "type": "Flush valve", "fu": 30, "ls": 0.56}, {"standard": "BS EN", "type": "Flush valve", "fu": 40, "ls": 0.7}, {"standard": "BS EN", "type": "Flush valve", "fu": 50, "ls": 0.77}, {"standard": "BS EN", "type": "Flush valve", "fu": 60, "ls": 0.9}, {"standard": "BS EN", "type": "Flush valve", "fu": 80, "ls": 1.06}, {"standard": "BS EN", "type": "Flush valve", "fu": 100, "ls": 1.25}, {"standard": "BS EN", "type": "Flush valve", "fu": 150, "ls": 1.68}, {"standard": "BS EN", "type": "Flush valve", "fu": 200, "ls": 2.1}, {"standard": "BS EN", "type": "Flush valve", "fu": 300, "ls": 2.8}, {"standard": "BS EN", "type": "Flush valve", "fu": 400, "ls": 3.53}, {"standard": "BS EN", "type": "Flush valve", "fu": 500, "ls": 4.1}, {"standard": "BS EN", "type": "Flush valve", "fu": 700, "ls": 5.25}, {"standard": "BS EN", "type": "Flush valve", "fu": 1000, "ls": 6.8}, {"standard": "BS EN", "type": "Flush valve", "fu": 1500, "ls": 9.2}, {"standard": "BS EN", "type": "Flush valve", "fu": 2000, "ls": 11.2}, {"standard": "BS EN", "type": "Flush valve", "fu": 3000, "ls": 15.2}, {"standard": "BS EN", "type": "Flush valve", "fu": 4000, "ls": 18.5}, {"standard": "BS EN", "type": "Flush valve", "fu": 5000, "ls": 22}, {"standard": "BS EN", "type": "Flush valve", "fu": 6000, "ls": 25.2}, {"standard": "BS EN", "type": "Flush valve", "fu": 7000, "ls": 28}, {"standard": "BS EN", "type": "Flush valve", "fu": 7700, "ls": 30}, {"standard": "QCVN", "type": "Flush tank", "fu": 1, "ls": 0.189}, {"standard": "QCVN", "type": "Flush tank", "fu": 2, "ls": 0.315}, {"standard": "QCVN", "type": "Flush tank", "fu": 3, "ls": 0.4095}, {"standard": "QCVN", "type": "Flush tank", "fu": 4, "ls": 0.504}, {"standard": "QCVN", "type": "Flush tank", "fu": 5, "ls": 0.5922000000000001}, {"standard": "QCVN", "type": "Flush tank", "fu": 6, "ls": 0.6740999999999999}, {"standard": "QCVN", "type": "Flush tank", "fu": 7, "ls": 0.7434000000000001}, {"standard": "QCVN", "type": "Flush tank", "fu": 8, "ls": 0.8064}, {"standard": "QCVN", "type": "Flush tank", "fu": 9, "ls": 0.8631}, {"standard": "QCVN", "type": "Flush tank", "fu": 10, "ls": 0.9198}, {"standard": "QCVN", "type": "Flush tank", "fu": 11, "ls": 0.9702000000000001}, {"standard": "QCVN", "type": "Flush tank", "fu": 12, "ls": 1.008}, {"standard": "QCVN", "type": "Flush tank", "fu": 13, "ls": 1.0395}, {"standard": "QCVN", "type": "Flush tank", "fu": 14, "ls": 1.071}, {"standard": "QCVN", "type": "Flush tank", "fu": 15, "ls": 1.1025}, {"standard": "QCVN", "type": "Flush tank", "fu": 16, "ls": 1.134}, {"standard": "QCVN", "type": "Flush tank", "fu": 17, "ls": 1.1592}, {"standard": "QCVN", "type": "Flush tank", "fu": 18, "ls": 1.1844000000000001}, {"standard": "QCVN", "type": "Flush tank", "fu": 19, "ls": 1.2096}, {"standard": "QCVN", "type": "Flush tank", "fu": 20, "ls": 1.2348000000000001}, {"standard": "QCVN", "type": "Flush tank", "fu": 25, "ls": 1.3545}, {"standard": "QCVN", "type": "Flush tank", "fu": 30, "ls": 1.4679}, {"standard": "QCVN", "type": "Flush tank", "fu": 35, "ls": 1.5687}, {"standard": "QCVN", "type": "Flush tank", "fu": 40, "ls": 1.6569}, {"standard": "QCVN", "type": "Flush tank", "fu": 45, "ls": 1.7450999999999999}, {"standard": "QCVN", "type": "Flush tank", "fu": 50, "ls": 1.8333000000000002}, {"standard": "QCVN", "type": "Flush tank", "fu": 60, "ls": 2.016}, {"standard": "QCVN", "type": "Flush tank", "fu": 70, "ls": 2.205}, {"standard": "QCVN", "type": "Flush tank", "fu": 80, "ls": 2.394}, {"standard": "QCVN", "type": "Flush tank", "fu": 90, "ls": 2.583}, {"standard": "QCVN", "type": "Flush tank", "fu": 100, "ls": 2.7405}, {"standard": "QCVN", "type": "Flush tank", "fu": 120, "ls": 3.024}, {"standard": "QCVN", "type": "Flush tank", "fu": 140, "ls": 3.3075}, {"standard": "QCVN", "type": "Flush tank", "fu": 160, "ls": 3.591}, {"standard": "QCVN", "type": "Flush tank", "fu": 180, "ls": 3.843}, {"standard": "QCVN", "type": "Flush tank", "fu": 200, "ls": 4.095}, {"standard": "QCVN", "type": "Flush tank", "fu": 225, "ls": 4.41}, {"standard": "QCVN", "type": "Flush tank", "fu": 250, "ls": 4.725}, {"standard": "QCVN", "type": "Flush tank", "fu": 275, "ls": 5.04}, {"standard": "QCVN", "type": "Flush tank", "fu": 300, "ls": 5.355}, {"standard": "QCVN", "type": "Flush tank", "fu": 400, "ls": 6.615}, {"standard": "QCVN", "type": "Flush tank", "fu": 500, "ls": 7.812}, {"standard": "QCVN", "type": "Flush tank", "fu": 750, "ls": 10.71}, {"standard": "QCVN", "type": "Flush tank", "fu": 1000, "ls": 13.104}, {"standard": "QCVN", "type": "Flush tank", "fu": 1250, "ls": 15.057}, {"standard": "QCVN", "type": "Flush tank", "fu": 1500, "ls": 16.947}, {"standard": "QCVN", "type": "Flush tank", "fu": 1750, "ls": 18.711}, {"standard": "QCVN", "type": "Flush tank", "fu": 2000, "ls": 20.475}, {"standard": "QCVN", "type": "Flush tank", "fu": 2500, "ls": 23.94}, {"standard": "QCVN", "type": "Flush tank", "fu": 3000, "ls": 27.279}, {"standard": "QCVN", "type": "Flush tank", "fu": 4000, "ls": 33.705}, {"standard": "QCVN", "type": "Flush tank", "fu": 5000, "ls": 37.359}, {"standard": "QCVN", "type": "Flush valve", "fu": 5, "ls": 0.946}, {"standard": "QCVN", "type": "Flush valve", "fu": 6, "ls": 1.098}, {"standard": "QCVN", "type": "Flush valve", "fu": 7, "ls": 1.249}, {"standard": "QCVN", "type": "Flush valve", "fu": 8, "ls": 1.401}, {"standard": "QCVN", "type": "Flush valve", "fu": 9, "ls": 1.552}, {"standard": "QCVN", "type": "Flush valve", "fu": 10, "ls": 1.703}, {"standard": "QCVN", "type": "Flush valve", "fu": 11, "ls": 1.754}, {"standard": "QCVN", "type": "Flush valve", "fu": 12, "ls": 1.805}, {"standard": "QCVN", "type": "Flush valve", "fu": 13, "ls": 1.855}, {"standard": "QCVN", "type": "Flush valve", "fu": 14, "ls": 1.906}, {"standard": "QCVN", "type": "Flush valve", "fu": 15, "ls": 1.956}, {"standard": "QCVN", "type": "Flush valve", "fu": 16, "ls": 2.007}, {"standard": "QCVN", "type": "Flush valve", "fu": 17, "ls": 2.057}, {"standard": "QCVN", "type": "Flush valve", "fu": 18, "ls": 2.108}, {"standard": "QCVN", "type": "Flush valve", "fu": 19, "ls": 2.158}, {"standard": "QCVN", "type": "Flush valve", "fu": 20, "ls": 2.208}, {"standard": "QCVN", "type": "Flush valve", "fu": 25, "ls": 2.397}, {"standard": "QCVN", "type": "Flush valve", "fu": 30, "ls": 2.65}, {"standard": "QCVN", "type": "Flush valve", "fu": 35, "ls": 2.776}, {"standard": "QCVN", "type": "Flush valve", "fu": 40, "ls": 2.965}, {"standard": "QCVN", "type": "Flush valve", "fu": 45, "ls": 3.092}, {"standard": "QCVN", "type": "Flush valve", "fu": 50, "ls": 3.249}, {"standard": "QCVN", "type": "Flush valve", "fu": 60, "ls": 3.47}, {"standard": "QCVN", "type": "Flush valve", "fu": 70, "ls": 3.722}, {"standard": "QCVN", "type": "Flush valve", "fu": 80, "ls": 3.943}, {"standard": "QCVN", "type": "Flush valve", "fu": 90, "ls": 4.101}, {"standard": "QCVN", "type": "Flush valve", "fu": 100, "ls": 4.29}, {"standard": "QCVN", "type": "Flush valve", "fu": 120, "ls": 4.606}, {"standard": "QCVN", "type": "Flush valve", "fu": 140, "ls": 4.922}, {"standard": "QCVN", "type": "Flush valve", "fu": 160, "ls": 5.237}, {"standard": "QCVN", "type": "Flush valve", "fu": 180, "ls": 5.489}, {"standard": "QCVN", "type": "Flush valve", "fu": 200, "ls": 5.742}, {"standard": "QCVN", "type": "Flush valve", "fu": 225, "ls": 6.025}, {"standard": "QCVN", "type": "Flush valve", "fu": 250, "ls": 6.309}, {"standard": "QCVN", "type": "Flush valve", "fu": 275, "ls": 6.593}, {"standard": "QCVN", "type": "Flush valve", "fu": 300, "ls": 6.814}, {"standard": "QCVN", "type": "Flush valve", "fu": 400, "ls": 8.013}, {"standard": "QCVN", "type": "Flush valve", "fu": 500, "ls": 9.023}, {"standard": "QCVN", "type": "Flush valve", "fu": 750, "ls": 11.168}, {"standard": "QCVN", "type": "Flush valve", "fu": 1000, "ls": 13.124}, {"standard": "QCVN", "type": "Flush valve", "fu": 1250, "ls": 15.079}, {"standard": "QCVN", "type": "Flush valve", "fu": 1500, "ls": 16.973}, {"standard": "QCVN", "type": "Flush valve", "fu": 1750, "ls": 18.74}, {"standard": "QCVN", "type": "Flush valve", "fu": 2000, "ls": 20.507}, {"standard": "QCVN", "type": "Flush valve", "fu": 2500, "ls": 23.974}, {"standard": "QCVN", "type": "Flush valve", "fu": 3000, "ls": 27.319}, {"standard": "QCVN", "type": "Flush valve", "fu": 4000, "ls": 33.125}, {"standard": "QCVN", "type": "Flush valve", "fu": 5000, "ls": 37.413}, {"standard": "AS NZS", "type": "Flush tank", "fu": 1, "ls": 0.09}, {"standard": "AS NZS", "type": "Flush tank", "fu": 2, "ls": 0.12}, {"standard": "AS NZS", "type": "Flush tank", "fu": 3, "ls": 0.14}, {"standard": "AS NZS", "type": "Flush tank", "fu": 4, "ls": 0.16}, {"standard": "AS NZS", "type": "Flush tank", "fu": 5, "ls": 0.18}, {"standard": "AS NZS", "type": "Flush tank", "fu": 6, "ls": 0.2}, {"standard": "AS NZS", "type": "Flush tank", "fu": 7, "ls": 0.22}, {"standard": "AS NZS", "type": "Flush tank", "fu": 8, "ls": 0.24}, {"standard": "AS NZS", "type": "Flush tank", "fu": 9, "ls": 0.25}, {"standard": "AS NZS", "type": "Flush tank", "fu": 10, "ls": 0.26}, {"standard": "AS NZS", "type": "Flush tank", "fu": 11, "ls": 0.28}, {"standard": "AS NZS", "type": "Flush tank", "fu": 12, "ls": 0.29}, {"standard": "AS NZS", "type": "Flush tank", "fu": 13, "ls": 0.3}, {"standard": "AS NZS", "type": "Flush tank", "fu": 14, "ls": 0.31}, {"standard": "AS NZS", "type": "Flush tank", "fu": 15, "ls": 0.33}, {"standard": "AS NZS", "type": "Flush tank", "fu": 16, "ls": 0.34}, {"standard": "AS NZS", "type": "Flush tank", "fu": 17, "ls": 0.35}, {"standard": "AS NZS", "type": "Flush tank", "fu": 18, "ls": 0.36}, {"standard": "AS NZS", "type": "Flush tank", "fu": 19, "ls": 0.37}, {"standard": "AS NZS", "type": "Flush tank", "fu": 20, "ls": 0.38}, {"standard": "AS NZS", "type": "Flush tank", "fu": 21, "ls": 0.39}, {"standard": "AS NZS", "type": "Flush tank", "fu": 22, "ls": 0.4}, {"standard": "AS NZS", "type": "Flush tank", "fu": 23, "ls": 0.41}, {"standard": "AS NZS", "type": "Flush tank", "fu": 24, "ls": 0.42}, {"standard": "AS NZS", "type": "Flush tank", "fu": 25, "ls": 0.43}, {"standard": "AS NZS", "type": "Flush tank", "fu": 26, "ls": 0.43}, {"standard": "AS NZS", "type": "Flush tank", "fu": 27, "ls": 0.44}, {"standard": "AS NZS", "type": "Flush tank", "fu": 28, "ls": 0.45}, {"standard": "AS NZS", "type": "Flush tank", "fu": 29, "ls": 0.46}, {"standard": "AS NZS", "type": "Flush tank", "fu": 30, "ls": 0.47}, {"standard": "AS NZS", "type": "Flush tank", "fu": 31, "ls": 0.48}, {"standard": "AS NZS", "type": "Flush tank", "fu": 32, "ls": 0.49}, {"standard": "AS NZS", "type": "Flush tank", "fu": 33, "ls": 0.49}, {"standard": "AS NZS", "type": "Flush tank", "fu": 34, "ls": 0.5}, {"standard": "AS NZS", "type": "Flush tank", "fu": 35, "ls": 0.51}, {"standard": "AS NZS", "type": "Flush tank", "fu": 36, "ls": 0.52}, {"standard": "AS NZS", "type": "Flush tank", "fu": 37, "ls": 0.52}, {"standard": "AS NZS", "type": "Flush tank", "fu": 38, "ls": 0.53}, {"standard": "AS NZS", "type": "Flush tank", "fu": 39, "ls": 0.54}, {"standard": "AS NZS", "type": "Flush tank", "fu": 40, "ls": 0.55}, {"standard": "AS NZS", "type": "Flush tank", "fu": 41, "ls": 0.55}, {"standard": "AS NZS", "type": "Flush tank", "fu": 42, "ls": 0.56}, {"standard": "AS NZS", "type": "Flush tank", "fu": 43, "ls": 0.57}, {"standard": "AS NZS", "type": "Flush tank", "fu": 44, "ls": 0.58}, {"standard": "AS NZS", "type": "Flush tank", "fu": 45, "ls": 0.58}, {"standard": "AS NZS", "type": "Flush tank", "fu": 46, "ls": 0.59}, {"standard": "AS NZS", "type": "Flush tank", "fu": 47, "ls": 0.6}, {"standard": "AS NZS", "type": "Flush tank", "fu": 48, "ls": 0.6}, {"standard": "AS NZS", "type": "Flush tank", "fu": 49, "ls": 0.61}, {"standard": "AS NZS", "type": "Flush tank", "fu": 50, "ls": 0.62}, {"standard": "AS NZS", "type": "Flush tank", "fu": 51, "ls": 0.62}, {"standard": "AS NZS", "type": "Flush tank", "fu": 52, "ls": 0.63}, {"standard": "AS NZS", "type": "Flush tank", "fu": 53, "ls": 0.64}, {"standard": "AS NZS", "type": "Flush tank", "fu": 54, "ls": 0.64}, {"standard": "AS NZS", "type": "Flush tank", "fu": 55, "ls": 0.65}, {"standard": "AS NZS", "type": "Flush tank", "fu": 56, "ls": 0.65}, {"standard": "AS NZS", "type": "Flush tank", "fu": 57, "ls": 0.66}, {"standard": "AS NZS", "type": "Flush tank", "fu": 58, "ls": 0.67}, {"standard": "AS NZS", "type": "Flush tank", "fu": 59, "ls": 0.67}, {"standard": "AS NZS", "type": "Flush tank", "fu": 60, "ls": 0.68}, {"standard": "AS NZS", "type": "Flush tank", "fu": 100, "ls": 1.2}, {"standard": "AS NZS", "type": "Flush tank", "fu": 150, "ls": 1.35}, {"standard": "AS NZS", "type": "Flush tank", "fu": 200, "ls": 1.45}, {"standard": "AS NZS", "type": "Flush tank", "fu": 250, "ls": 1.6}, {"standard": "AS NZS", "type": "Flush tank", "fu": 300, "ls": 1.7}, {"standard": "AS NZS", "type": "Flush tank", "fu": 350, "ls": 1.85}, {"standard": "AS NZS", "type": "Flush tank", "fu": 400, "ls": 2}, {"standard": "AS NZS", "type": "Flush tank", "fu": 450, "ls": 2.15}, {"standard": "AS NZS", "type": "Flush tank", "fu": 500, "ls": 2.35}, {"standard": "AS NZS", "type": "Flush tank", "fu": 550, "ls": 2.5}, {"standard": "AS NZS", "type": "Flush tank", "fu": 600, "ls": 2.6}, {"standard": "AS NZS", "type": "Flush tank", "fu": 650, "ls": 2.75}, {"standard": "AS NZS", "type": "Flush tank", "fu": 700, "ls": 2.85}, {"standard": "AS NZS", "type": "Flush tank", "fu": 750, "ls": 2.95}, {"standard": "AS NZS", "type": "Flush tank", "fu": 800, "ls": 3.05}, {"standard": "AS NZS", "type": "Flush tank", "fu": 850, "ls": 3.2}, {"standard": "AS NZS", "type": "Flush tank", "fu": 900, "ls": 3.3}, {"standard": "AS NZS", "type": "Flush tank", "fu": 1000, "ls": 3.5}, {"standard": "AS NZS", "type": "Flush tank", "fu": 1200, "ls": 3.8}, {"standard": "AS NZS", "type": "Flush tank", "fu": 1400, "ls": 4.2}, {"standard": "AS NZS", "type": "Flush tank", "fu": 1600, "ls": 4.6}, {"standard": "AS NZS", "type": "Flush tank", "fu": 1800, "ls": 4.9}, {"standard": "AS NZS", "type": "Flush tank", "fu": 2000, "ls": 5.25}, {"standard": "AS NZS", "type": "Flush tank", "fu": 2200, "ls": 5.5}, {"standard": "AS NZS", "type": "Flush tank", "fu": 2400, "ls": 5.75}, {"standard": "AS NZS", "type": "Flush tank", "fu": 2600, "ls": 6}, {"standard": "AS NZS", "type": "Flush tank", "fu": 2800, "ls": 6.35}, {"standard": "AS NZS", "type": "Flush tank", "fu": 3000, "ls": 6.7}, {"standard": "AS NZS", "type": "Flush tank", "fu": 3500, "ls": 7.25}, {"standard": "AS NZS", "type": "Flush tank", "fu": 4000, "ls": 7.75}, {"standard": "AS NZS", "type": "Flush tank", "fu": 4500, "ls": 8.4}, {"standard": "AS NZS", "type": "Flush tank", "fu": 5000, "ls": 9}, {"standard": "AS NZS", "type": "Flush valve", "fu": 1, "ls": 0.09}, {"standard": "AS NZS", "type": "Flush valve", "fu": 2, "ls": 0.12}, {"standard": "AS NZS", "type": "Flush valve", "fu": 3, "ls": 0.14}, {"standard": "AS NZS", "type": "Flush valve", "fu": 4, "ls": 0.16}, {"standard": "AS NZS", "type": "Flush valve", "fu": 5, "ls": 0.18}, {"standard": "AS NZS", "type": "Flush valve", "fu": 6, "ls": 0.2}, {"standard": "AS NZS", "type": "Flush valve", "fu": 7, "ls": 0.22}, {"standard": "AS NZS", "type": "Flush valve", "fu": 8, "ls": 0.24}, {"standard": "AS NZS", "type": "Flush valve", "fu": 9, "ls": 0.25}, {"standard": "AS NZS", "type": "Flush valve", "fu": 10, "ls": 0.26}, {"standard": "AS NZS", "type": "Flush valve", "fu": 11, "ls": 0.28}, {"standard": "AS NZS", "type": "Flush valve", "fu": 12, "ls": 0.29}, {"standard": "AS NZS", "type": "Flush valve", "fu": 13, "ls": 0.3}, {"standard": "AS NZS", "type": "Flush valve", "fu": 14, "ls": 0.31}, {"standard": "AS NZS", "type": "Flush valve", "fu": 15, "ls": 0.33}, {"standard": "AS NZS", "type": "Flush valve", "fu": 16, "ls": 0.34}, {"standard": "AS NZS", "type": "Flush valve", "fu": 17, "ls": 0.35}, {"standard": "AS NZS", "type": "Flush valve", "fu": 18, "ls": 0.36}, {"standard": "AS NZS", "type": "Flush valve", "fu": 19, "ls": 0.37}, {"standard": "AS NZS", "type": "Flush valve", "fu": 20, "ls": 0.38}, {"standard": "AS NZS", "type": "Flush valve", "fu": 21, "ls": 0.39}, {"standard": "AS NZS", "type": "Flush valve", "fu": 22, "ls": 0.4}, {"standard": "AS NZS", "type": "Flush valve", "fu": 23, "ls": 0.41}, {"standard": "AS NZS", "type": "Flush valve", "fu": 24, "ls": 0.42}, {"standard": "AS NZS", "type": "Flush valve", "fu": 25, "ls": 0.43}, {"standard": "AS NZS", "type": "Flush valve", "fu": 26, "ls": 0.43}, {"standard": "AS NZS", "type": "Flush valve", "fu": 27, "ls": 0.44}, {"standard": "AS NZS", "type": "Flush valve", "fu": 28, "ls": 0.45}, {"standard": "AS NZS", "type": "Flush valve", "fu": 29, "ls": 0.46}, {"standard": "AS NZS", "type": "Flush valve", "fu": 30, "ls": 0.47}, {"standard": "AS NZS", "type": "Flush valve", "fu": 31, "ls": 0.48}, {"standard": "AS NZS", "type": "Flush valve", "fu": 32, "ls": 0.49}, {"standard": "AS NZS", "type": "Flush valve", "fu": 33, "ls": 0.49}, {"standard": "AS NZS", "type": "Flush valve", "fu": 34, "ls": 0.5}, {"standard": "AS NZS", "type": "Flush valve", "fu": 35, "ls": 0.51}, {"standard": "AS NZS", "type": "Flush valve", "fu": 36, "ls": 0.52}, {"standard": "AS NZS", "type": "Flush valve", "fu": 37, "ls": 0.52}, {"standard": "AS NZS", "type": "Flush valve", "fu": 38, "ls": 0.53}, {"standard": "AS NZS", "type": "Flush valve", "fu": 39, "ls": 0.54}, {"standard": "AS NZS", "type": "Flush valve", "fu": 40, "ls": 0.55}, {"standard": "AS NZS", "type": "Flush valve", "fu": 41, "ls": 0.55}, {"standard": "AS NZS", "type": "Flush valve", "fu": 42, "ls": 0.56}, {"standard": "AS NZS", "type": "Flush valve", "fu": 43, "ls": 0.57}, {"standard": "AS NZS", "type": "Flush valve", "fu": 44, "ls": 0.58}, {"standard": "AS NZS", "type": "Flush valve", "fu": 45, "ls": 0.58}, {"standard": "AS NZS", "type": "Flush valve", "fu": 46, "ls": 0.59}, {"standard": "AS NZS", "type": "Flush valve", "fu": 47, "ls": 0.6}, {"standard": "AS NZS", "type": "Flush valve", "fu": 48, "ls": 0.6}, {"standard": "AS NZS", "type": "Flush valve", "fu": 49, "ls": 0.61}, {"standard": "AS NZS", "type": "Flush valve", "fu": 50, "ls": 0.62}, {"standard": "AS NZS", "type": "Flush valve", "fu": 51, "ls": 0.62}, {"standard": "AS NZS", "type": "Flush valve", "fu": 52, "ls": 0.63}, {"standard": "AS NZS", "type": "Flush valve", "fu": 53, "ls": 0.64}, {"standard": "AS NZS", "type": "Flush valve", "fu": 54, "ls": 0.64}, {"standard": "AS NZS", "type": "Flush valve", "fu": 55, "ls": 0.65}, {"standard": "AS NZS", "type": "Flush valve", "fu": 56, "ls": 0.65}, {"standard": "AS NZS", "type": "Flush valve", "fu": 57, "ls": 0.66}, {"standard": "AS NZS", "type": "Flush valve", "fu": 58, "ls": 0.67}, {"standard": "AS NZS", "type": "Flush valve", "fu": 59, "ls": 0.67}, {"standard": "AS NZS", "type": "Flush valve", "fu": 60, "ls": 0.68}, {"standard": "AS NZS", "type": "Flush valve", "fu": 100, "ls": 1.2}, {"standard": "AS NZS", "type": "Flush valve", "fu": 150, "ls": 1.35}, {"standard": "AS NZS", "type": "Flush valve", "fu": 200, "ls": 1.45}, {"standard": "AS NZS", "type": "Flush valve", "fu": 250, "ls": 1.6}, {"standard": "AS NZS", "type": "Flush valve", "fu": 300, "ls": 1.7}, {"standard": "AS NZS", "type": "Flush valve", "fu": 350, "ls": 1.85}, {"standard": "AS NZS", "type": "Flush valve", "fu": 400, "ls": 2}, {"standard": "AS NZS", "type": "Flush valve", "fu": 450, "ls": 2.15}, {"standard": "AS NZS", "type": "Flush valve", "fu": 500, "ls": 2.35}, {"standard": "AS NZS", "type": "Flush valve", "fu": 550, "ls": 2.5}, {"standard": "AS NZS", "type": "Flush valve", "fu": 600, "ls": 2.6}, {"standard": "AS NZS", "type": "Flush valve", "fu": 650, "ls": 2.75}, {"standard": "AS NZS", "type": "Flush valve", "fu": 700, "ls": 2.85}, {"standard": "AS NZS", "type": "Flush valve", "fu": 750, "ls": 2.95}, {"standard": "AS NZS", "type": "Flush valve", "fu": 800, "ls": 3.05}, {"standard": "AS NZS", "type": "Flush valve", "fu": 850, "ls": 3.2}, {"standard": "AS NZS", "type": "Flush valve", "fu": 900, "ls": 3.3}, {"standard": "AS NZS", "type": "Flush valve", "fu": 1000, "ls": 3.5}, {"standard": "AS NZS", "type": "Flush valve", "fu": 1200, "ls": 3.8}, {"standard": "AS NZS", "type": "Flush valve", "fu": 1400, "ls": 4.2}, {"standard": "AS NZS", "type": "Flush valve", "fu": 1600, "ls": 4.6}, {"standard": "AS NZS", "type": "Flush valve", "fu": 1800, "ls": 4.9}, {"standard": "AS NZS", "type": "Flush valve", "fu": 2000, "ls": 5.25}, {"standard": "AS NZS", "type": "Flush valve", "fu": 2200, "ls": 5.5}, {"standard": "AS NZS", "type": "Flush valve", "fu": 2400, "ls": 5.75}, {"standard": "AS NZS", "type": "Flush valve", "fu": 2600, "ls": 6}, {"standard": "AS NZS", "type": "Flush valve", "fu": 2800, "ls": 6.35}, {"standard": "AS NZS", "type": "Flush valve", "fu": 3000, "ls": 6.7}, {"standard": "AS NZS", "type": "Flush valve", "fu": 3500, "ls": 7.25}, {"standard": "AS NZS", "type": "Flush valve", "fu": 4000, "ls": 7.75}, {"standard": "AS NZS", "type": "Flush valve", "fu": 4500, "ls": 8.4}, {"standard": "AS NZS", "type": "Flush valve", "fu": 5000, "ls": 9}], "velocity": [{"standard": "IPC", "building": "Residential", "system": "CW", "recommended": 1.5, "maximum": 2}, {"standard": "IPC", "building": "Hotel", "system": "CW", "recommended": 1.5, "maximum": 2}, {"standard": "IPC", "building": "Hospital", "system": "CW", "recommended": 1.5, "maximum": 2}, {"standard": "BS EN", "building": "Residential", "system": "CW", "recommended": 1.5, "maximum": 2}, {"standard": "BS EN", "building": "Hotel", "system": "CW", "recommended": 1.5, "maximum": 2}, {"standard": "BS EN", "building": "Hospital", "system": "CW", "recommended": 1.5, "maximum": 2}, {"standard": "QCVN", "building": "Residential", "system": "CW", "recommended": 1.5, "maximum": 2}, {"standard": "QCVN", "building": "Hotel", "system": "CW", "recommended": 1.5, "maximum": 2}, {"standard": "QCVN", "building": "Hospital", "system": "CW", "recommended": 1.5, "maximum": 2}, {"standard": "AS NZS", "building": "Residential", "system": "CW", "recommended": 1.5, "maximum": 2}, {"standard": "AS NZS", "building": "Hotel", "system": "CW", "recommended": 1.5, "maximum": 2}, {"standard": "AS NZS", "building": "Hospital", "system": "CW", "recommended": 1.5, "maximum": 2}, {"standard": "IPC", "building": "Residential", "system": "HW", "recommended": 1, "maximum": 1.5}, {"standard": "IPC", "building": "Hotel", "system": "HW", "recommended": 1, "maximum": 1.5}, {"standard": "IPC", "building": "Hospital", "system": "HW", "recommended": 1, "maximum": 1.5}, {"standard": "BS EN", "building": "Residential", "system": "HW", "recommended": 1, "maximum": 1.5}, {"standard": "BS EN", "building": "Hotel", "system": "HW", "recommended": 1, "maximum": 1.5}, {"standard": "BS EN", "building": "Hospital", "system": "HW", "recommended": 1, "maximum": 1.5}, {"standard": "QCVN", "building": "Residential", "system": "HW", "recommended": 1, "maximum": 1.5}, {"standard": "QCVN", "building": "Hotel", "system": "HW", "recommended": 1, "maximum": 1.5}, {"standard": "QCVN", "building": "Hospital", "system": "HW", "recommended": 1, "maximum": 1.5}, {"standard": "AS NZS", "building": "Residential", "system": "HW", "recommended": 1, "maximum": 1.5}, {"standard": "AS NZS", "building": "Hotel", "system": "HW", "recommended": 1, "maximum": 1.5}, {"standard": "AS NZS", "building": "Hospital", "system": "HW", "recommended": 1, "maximum": 1.5}]};
 // === DEFAULT_DB_END ===
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/* ============================ Auth Form Component ============================ */
+function AuthForm({ onLoginSuccess }) {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [infoMsg, setInfoMsg] = useState("");
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg("");
+    setInfoMsg("");
+    try {
+      if (!supabase) throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
+      if (isSignUp) {
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        
+        // Tự động thu thập email người dùng đăng ký vào bảng 'profiles'
+        if (data?.user) {
+          try {
+             // FIX: bảng thật trên Supabase là "Profile" (viết hoa P), cột ID/Email (viết hoa) — không có cột created_at.
+            // Không set "Trial expires at" ở đây -> để trống -> checkUserTrial() tự fallback về mặc định TRIAL_DAYS ngày.
+            await supabase.from('Profile').insert([{ ID: data.user.id, Email: email }]);
+          } catch(errProfile) {
+             console.log("Lỗi tạo profile:", errProfile);
+          }
+        }
+        
+        setInfoMsg("Đăng ký thành công! Bạn có thể Đăng nhập ngay bây giờ.");
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        onLoginSuccess(data.user);
+      }
+    } catch (err) {
+      setErrorMsg(err.message || "Đã xảy ra lỗi, vui lòng thử lại!");
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-[#EDE6D6] p-8 max-w-md w-full">
+        <div className="flex flex-col items-center mb-6 text-center">
+          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#4FB3A6] to-[#1F7A70] flex items-center justify-center mb-3 text-white">
+            <Droplet size={24} />
+          </div>
+          <h2 className="text-xl font-bold text-[#1F3B36]">Pipe Design Assistant</h2>
+          <p className="text-xs text-[#7D8B87] mt-1">Đăng nhập tài khoản để sử dụng công cụ (Dùng thử miễn phí {TRIAL_DAYS} ngày)</p>
+        </div>
+        {errorMsg && (
+          <div className="mb-4 text-xs text-[#C13A3A] bg-[#FBE7E7] rounded-xl p-3 border border-[#C13A3A]/20">
+            {errorMsg}
+          </div>
+        )}
+        {infoMsg && (
+          <div className="mb-4 text-xs text-[#1E8A50] bg-[#E4F6EC] rounded-xl p-3 border border-[#1E8A50]/20">
+            {infoMsg}
+          </div>
+        )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-[#7D8B87] mb-1">Email của bạn</label>
+            <input
+              type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@company.com"
+              className="w-full bg-[#FAF7EF] border border-[#E7E0CE] rounded-xl px-3.5 py-2.5 text-sm text-[#243B36] focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/40"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#7D8B87] mb-1">Mật khẩu</label>
+            <input
+              type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full bg-[#FAF7EF] border border-[#E7E0CE] rounded-xl px-3.5 py-2.5 text-sm text-[#243B36] focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/40"
+            />
+          </div>
+          <button
+            type="submit" disabled={loading}
+            className="w-full mt-2 flex items-center justify-center gap-2 rounded-2xl py-3 font-semibold text-white text-sm bg-gradient-to-r from-[#4FB3A6] to-[#1F7A70] hover:brightness-105 transition shadow-md disabled:opacity-50"
+          >
+            {loading ? "Đang xử lý..." : isSignUp ? "Tạo tài khoản dùng thử" : "Đăng nhập"}
+          </button>
+        </form>
+        <div className="mt-6 text-center text-xs text-[#7D8B87]">
+          {isSignUp ? "Đã có tài khoản?" : "Chưa có tài khoản?"}{" "}
+          <button
+            onClick={() => { setIsSignUp(!isSignUp); setErrorMsg(""); setInfoMsg(""); }}
+            className="font-semibold text-[#1F7A70] hover:underline"
+          >
+            {isSignUp ? "Đăng nhập ngay" : "Đăng ký dùng thử miễn phí"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+/* ============================ Expired Trial Screen ============================ */
+function ExpiredTrialScreen({ user, onLogout }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-[#EDE6D6] p-8 max-w-md w-full text-center">
+        <div className="w-12 h-12 rounded-full bg-[#FEF3DE] flex items-center justify-center mx-auto mb-4 text-[#B8791A]">
+          <Lock size={24} />
+        </div>
+        <h2 className="text-xl font-bold text-[#1F3B36]">Đã hết thời gian dùng thử!</h2>
+        <p className="text-xs text-[#7D8B87] mt-2 leading-relaxed">
+          Tài khoản <strong className="text-[#243B36]">{user.email}</strong> của bạn đã hết thời hạn {TRIAL_DAYS} ngày dùng thử miễn phí.
+        </p>
+        <div className="my-6 p-4 bg-[#FAF7EF] rounded-2xl border border-[#E7E0CE] text-left">
+          <p className="text-xs text-[#243B36] font-medium mb-1">Để nâng cấp bản quyền Pro:</p>
+          <p className="text-xs text-[#7D8B87]">Vui lòng liên hệ Admin qua Email hoặc Zalo để kích hoạt tài khoản vĩnh viễn.</p>
+        </div>
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center justify-center gap-2 rounded-2xl py-2.5 font-medium text-[#7D8B87] border border-[#E7E0CE] hover:bg-[#FAF7EF] transition text-sm"
+        >
+          <LogOut size={15} /> Đăng xuất
+        </button>
+      </div>
+    </div>
+  );
+}
 /* ============================ helpers ============================ */
-
-// STEP 4 APPROVED FIX: KHÔNG còn clamp âm thầm khi Total FU nằm ngoài khoảng dữ liệu.
-// - Trong khoảng [min, max] (bao gồm 2 đầu mút): giữ nguyên nội suy tuyến tính như trước,
-//   khớp chính xác giá trị Demand tại các điểm có sẵn trong DB.
-// - Ngoài khoảng: trả về null (out-of-range) thay vì mượn giá trị min/max — không suy diễn,
-//   không tạo ra một điểm toán học mới ngoài database.
 function interpolate(table, standard, type, totalFU) {
   const rows = table
     .filter(r => r.standard === standard && r.type === type && r.ls != null)
     .sort((a, b) => a.fu - b.fu);
   if (rows.length === 0) return null;
   const min = rows[0].fu, max = rows[rows.length - 1].fu;
-  if (totalFU < min || totalFU > max) return null; // out-of-range — không còn clamp
+  if (totalFU < min || totalFU > max) return null;
   for (let i = 0; i < rows.length - 1; i++) {
     const a = rows[i], b = rows[i + 1];
     if (totalFU >= a.fu && totalFU <= b.fu) {
@@ -257,48 +219,37 @@ function interpolate(table, standard, type, totalFU) {
       return a.ls + t * (b.ls - a.ls);
     }
   }
-  return rows[rows.length - 1].ls; // an toàn dự phòng, thực tế không đạt tới do đã lọc range ở trên
+  return rows[rows.length - 1].ls;
 }
-
-// Lấy khoảng FU khả dụng của 1 nhóm (Standard+Type) để hiển thị cảnh báo out-of-range.
-// Không đụng vào interpolate() — hàm phụ trợ riêng, chỉ phục vụ hiển thị.
 function getFuRange(table, standard, type) {
   const rows = table.filter(r => r.standard === standard && r.type === type && r.ls != null);
   if (rows.length === 0) return null;
   const fus = rows.map(r => r.fu);
   return { min: Math.min(...fus), max: Math.max(...fus) };
 }
-
 function crossSectionArea(idMm) {
-  const r = idMm / 2 / 1000; // m
-  return Math.PI * r * r; // m^2
+  const r = idMm / 2 / 1000;
+  return Math.PI * r * r;
 }
-
 function velocityMs(flowLs, idMm) {
   const flowM3s = flowLs / 1000;
   const area = crossSectionArea(idMm);
   return flowM3s / area;
 }
-
-// Hazen-Williams head loss, SI form: hf = 10.67 * L * Q^1.852 / (C^1.852 * D^4.8704), Q in m3/s, D in m
 function headLossHW(flowLs, idMm, C, lengthM = 100) {
   const Q = flowLs / 1000;
   const D = idMm / 1000;
   const hf = (10.67 * lengthM * Math.pow(Q, 1.852)) / (Math.pow(C, 1.852) * Math.pow(D, 4.8704));
-  return hf; // m per `lengthM` meters
+  return hf;
 }
-
 function pressureLossKPa(headLossM) {
-  return headLossM * 9.81; // kPa, since 1 m water column ~= 9.81 kPa
+  return headLossM * 9.81;
 }
-
 function fmt(n, d = 2) {
   if (n === null || n === undefined || isNaN(n)) return "-";
   return Number(n).toFixed(d);
 }
-
 /* ============================ UI atoms ============================ */
-
 function Card({ children, className = "" }) {
   return (
     <div className={`bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-[#EDE6D6] p-6 ${className}`}>
@@ -306,7 +257,6 @@ function Card({ children, className = "" }) {
     </div>
   );
 }
-
 function SectionTitle({ icon: Icon, children }) {
   return (
     <div className="flex items-center gap-2 mb-4">
@@ -317,7 +267,6 @@ function SectionTitle({ icon: Icon, children }) {
     </div>
   );
 }
-
 function Field({ label, children }) {
   return (
     <div className="mb-4 last:mb-0">
@@ -326,7 +275,6 @@ function Field({ label, children }) {
     </div>
   );
 }
-
 function Select({ value, onChange, options }) {
   return (
     <select
@@ -340,7 +288,6 @@ function Select({ value, onChange, options }) {
     </select>
   );
 }
-
 function Toggle2({ value, onChange, leftLabel, rightLabel, leftIcon, rightIcon }) {
   const leftActive = value === leftLabel;
   const rightActive = value === rightLabel;
@@ -369,10 +316,6 @@ function Toggle2({ value, onChange, leftLabel, rightLabel, leftIcon, rightIcon }
     </div>
   );
 }
-
-// STEP 5: Nhóm toggle tổng quát cho N lựa chọn (thay vì chỉ 2 như Toggle2) — dùng cho
-// Flushing Type vì số lượng Type có thể khác 2 tuỳ Standard trong database (VD QCVN).
-// Tái sử dụng đúng style/màu sắc đã có ở Toggle2 (nhánh active bên trái), không tạo hệ màu mới.
 function ToggleGroup({ value, onChange, options }) {
   return (
     <div className="flex rounded-xl overflow-hidden border border-[#E7E0CE] bg-[#FAF7EF] p-1 gap-1">
@@ -395,7 +338,6 @@ function ToggleGroup({ value, onChange, options }) {
     </div>
   );
 }
-
 function PrimaryButton({ children, onClick, icon: Icon, disabled }) {
   return (
     <button
@@ -409,7 +351,6 @@ function PrimaryButton({ children, onClick, icon: Icon, disabled }) {
     </button>
   );
 }
-
 function SecondaryButton({ children, onClick, icon: Icon }) {
   return (
     <button
@@ -421,7 +362,6 @@ function SecondaryButton({ children, onClick, icon: Icon }) {
     </button>
   );
 }
-
 function StatusPill({ status }) {
   const map = {
     PASS: { bg: "bg-[#E4F6EC]", text: "text-[#1E8A50]", Icon: CheckCircle2, label: "PASS" },
@@ -436,7 +376,6 @@ function StatusPill({ status }) {
     </div>
   );
 }
-
 function Logo({ title }) {
   return (
     <div className="flex items-center gap-2 mb-6">
@@ -447,22 +386,15 @@ function Logo({ title }) {
     </div>
   );
 }
-
 /* ============================ Fixture searchable selector ============================ */
-// Thay thế <select> gốc bằng ô tìm kiếm + danh sách cuộn được, phù hợp với database dài.
-// KHÔNG tạo nguồn dữ liệu fixture riêng: nhận nguyên `options` (đã lọc theo Standard/System Type
-// từ db.fixtures ở component cha) và trả về đúng composite key (_key) khi chọn — giữ nguyên cơ chế
-// định danh ổn định đã cài ở bước trước.
 function FixtureSearchSelect({ options, value, onChange, isMissing }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-
   const selected = options.find(o => o._key === value);
   const q = query.trim().toLowerCase();
   const filtered = q === ""
     ? options
     : options.filter(o => `${o.name || ""} ${o.abbr || ""}`.toLowerCase().includes(q));
-
   return (
     <div className="relative">
       <button
@@ -475,10 +407,8 @@ function FixtureSearchSelect({ options, value, onChange, isMissing }) {
         </span>
         {selected && isMissing(selected) && <AlertTriangle size={13} className="text-[#C13A3A] shrink-0" />}
       </button>
-
       {open && (
         <>
-          {/* Lớp phủ trong suốt để đóng danh sách khi chạm ra ngoài — không đổi layout tổng thể */}
           <div className="fixed inset-0 z-10" onClick={() => { setOpen(false); setQuery(""); }} />
           <div className="absolute z-20 mt-1 w-full bg-white border border-[#E7E0CE] rounded-xl shadow-lg overflow-hidden">
             <div className="p-2 border-b border-[#EDE6D6]">
@@ -521,18 +451,7 @@ function FixtureSearchSelect({ options, value, onChange, isMissing }) {
     </div>
   );
 }
-
 /* ============================ Module 1 ============================ */
-
-// STEP 15/16: 4 fixture mặc định (UX thuần, KHÔNG phải dữ liệu database). Tìm bằng cách lọc DB.fixtures
-// theo đúng Standard + System Type hiện tại (không hard-code "IPC" — xem STEP 16 fix), khớp qua `abbr`/`name`
-// đã có sẵn trong DB — không hard-code bất kỳ FU Cold/Hot/abbreviation cụ thể nào, không tạo dữ liệu kỹ thuật mới.
-// STEP 16: thêm tham số `seedSystemType` — bắt buộc với các Standard có System Type (VD BS EN: Small/Medium/Large)
-// để không lấy nhầm dòng của System Type khác (tránh trùng abbr như "Bth" DN15/DN20 đã ghi nhận từ Step 1).
-// So sánh (f.systemType ?? "") === (seedSystemType ?? "") để coi null và "" là tương đương (IPC/QCVN/AS NZS
-// đều có systemType=null trong DB, khớp đúng với seedSystemType="" mặc định).
-// Nếu Standard hạt giống không có đủ 4 loại (VD: AS NZS không có Urinal), chỉ trả về các dòng tìm được —
-// KHÔNG suy diễn/bịa fixture thay thế.
 function buildInitialFixtureRows(db, seedStandard, seedSystemType) {
   const pool = db.fixtures.filter(f => f.standard === seedStandard && (f.systemType ?? "") === (seedSystemType ?? ""));
   const findFirst = pred => {
@@ -542,21 +461,13 @@ function buildInitialFixtureRows(db, seedStandard, seedSystemType) {
     return { fixtureId: key, qty: 1 };
   };
   const rows = [
-    findFirst(f => (f.abbr || "").toString().toUpperCase().startsWith("WC")),       // WC
-    findFirst(f => (f.name || "").toLowerCase().includes("basin")),                 // Basin
-    findFirst(f => (f.name || "").toLowerCase().includes("shower")),                // Shower
-    findFirst(f => (f.abbr || "").toString().toUpperCase().startsWith("UR")),       // Ur
+    findFirst(f => (f.abbr || "").toString().toUpperCase().startsWith("WC")),
+    findFirst(f => (f.name || "").toLowerCase().includes("basin")),
+    findFirst(f => (f.name || "").toLowerCase().includes("shower")),
+    findFirst(f => (f.abbr || "").toString().toUpperCase().startsWith("UR")),
   ];
   return rows.filter(Boolean);
 }
-
-// STEP 17 (Phương án B): Module1 giờ là "controlled component" — toàn bộ design state
-// (standard, buildingType, systemType, waterSystem, flushingType, fixtures, calculated) và các giá trị
-// derived từ chúng (standardOptions, systemTypeOptions, flushingTypeOptions, availableFixtures,
-// fixtureByKey, totalFU, missingFuKeys, designFlow, fuRange, outOfRange) được nâng lên App — Module1
-// chỉ nhận qua props (tên biến giữ nguyên như cũ để toàn bộ JSX/hàm hành động bên dưới không cần đổi).
-// Nhờ vậy Module1 có thể unmount/remount khi chuyển Module mà KHÔNG mất dữ liệu — vì dữ liệu không còn
-// sống trong Module1 nữa. Xem đầy đủ lý do tại App.
 function Module1({
   DB, onGoto, onExportExcel,
   standard, setStandard, buildingType, setBuildingType, systemType, setSystemType,
@@ -565,16 +476,8 @@ function Module1({
   calculated, setCalculated,
   standardOptions, systemTypeOptions, flushingTypeOptions,
   availableFixtures, totalFU, missingFuKeys, designFlow, fuRange, outOfRange,
-  // FIX V08_01 — ROOT CAUSE: customFUContribution được dùng ở JSX dòng "Custom FU contribution: ..."
-  // nhưng trước đây KHÔNG có trong danh sách prop nhận từ App (biến chỉ tồn tại trong App, ngoài phạm vi
-  // của Module1) -> ReferenceError khi render đúng lúc calculated=true && customFixtures.length>0,
-  // bị ErrorBoundary nuốt lỗi và thay UI bằng màn hình lỗi. Thêm đúng prop này, không đổi gì khác.
-  customFUContribution,
-  logActivity, // ghi log hoạt động vào Supabase (bảng user_activity) — giữ nguyên tính năng đã có trong bản deploy cũ
+  customFUContribution, logActivity // <-- Thêm logActivity
 }) {
-  // CUSTOM-FIXTURE-ARCHITECTURE-V04 — Toàn bộ hàm dưới đây giờ thao tác ĐÚNG state riêng (dbFixtures hoặc
-  // customFixtures), không còn dùng chung 1 setter + discriminator `type` như trước. Add/Edit/Delete DB
-  // fixture KHÔNG THỂ chạm vào customFixtures và ngược lại — đảm bảo bằng kiến trúc.
   const updateQty = (idx, qty) => {
     const copy = [...dbFixtures];
     copy[idx] = { ...copy[idx], qty: Math.max(0, parseInt(qty) || 0) };
@@ -585,7 +488,7 @@ function Module1({
   const addRow = () => {
     const used = new Set(dbFixtures.map(f => f.fixtureId));
     const next = availableFixtures.find(f => !used.has(f._key)) || availableFixtures[0];
-    if (!next) return; // Không còn fixture nào trong DB để thêm
+    if (!next) return;
     setDbFixtures([...dbFixtures, { fixtureId: next._key, qty: 1 }]);
     setCalculated(false);
   };
@@ -595,37 +498,21 @@ function Module1({
     setDbFixtures(copy);
     setCalculated(false);
   };
-
-  // STEP 29 — Custom Fixture: KHÔNG ghi vào db.fixtures/DEFAULT_DB, chỉ sống trong `fixtures` (Design state
-  // chung ở App) — nhờ vậy tự động persist qua Module1<->Module2 giống mọi fixture khác (đã có từ Step 17/18),
-  // không cần thêm cơ chế persistence riêng nào.
   const [customFormOpen, setCustomFormOpen] = useState(false);
   const [customForm, setCustomForm] = useState({
     name: "", abbr: "", qty: "1", inputMode: "FU", fuCold: "", fuHot: "", flowCold: "", flowHot: "",
   });
   const [customFormError, setCustomFormError] = useState(null);
-
   const resetCustomForm = () => {
     setCustomForm({ name: "", abbr: "", qty: "1", inputMode: "FU", fuCold: "", fuHot: "", flowCold: "", flowHot: "" });
     setCustomFormError(null);
   };
-
-  // STEP 29 (PART 15) — Validate: Name/Abbr bắt buộc (trim, không rỗng); Quantity > 0; FU/L-s >= 0, không
-  // NaN/Infinity. Cho phép FU Cold=0 VÀ FU Hot=0 đồng thời — không có quy tắc nào trong app/DB hiện tại
-  // cấm tổ hợp này (fixture Database cũng có thể có FU=0 ở 1 phía, VD WC ở Hot Water qua isHotWaterIneligible
-  // — không có tiền lệ cấm cả 2 phía đều 0), nên không tự đặt thêm rule nghiệp vụ mới.
-  // CUSTOM-FIXTURE-FINAL FIX — <input type="number"> phụ thuộc locale trình duyệt: nếu gõ dấu phẩy thập
-  // phân (thói quen phổ biến, VD "1,5"), chuẩn HTML5 number input coi là giá trị KHÔNG hợp lệ, e.target.value
-  // có thể trả về khác với những gì hiển thị trên màn hình (rủi ro thật, đã xác nhận qua audit code — không
-  // phải suy đoán). Đổi sang input dạng text (inputMode="decimal" giữ bàn phím số trên mobile) + tự parse
-  // chấp nhận CẢ dấu chấm VÀ dấu phẩy, không phụ thuộc hành vi parse nội bộ của trình duyệt/locale.
   const parseDecimal = s => {
     if (s === null || s === undefined) return NaN;
     const normalized = String(s).trim().replace(",", ".");
     if (normalized === "") return NaN;
     return Number(normalized);
   };
-
   const validateCustomForm = f => {
     const name = f.name.trim();
     const abbr = f.abbr.trim();
@@ -644,19 +531,13 @@ function Module1({
     }
     return null;
   };
-
   const addCustomFixtureRow = () => {
     const err = validateCustomForm(customForm);
     if (err) {
-      console.log("[CUSTOM TRACE 07] validateCustomForm THẤT BẠI:", err, "| customForm lúc submit:", JSON.stringify(customForm));
       setCustomFormError(err);
-      // CUSTOM-FIXTURE-ROOT-CAUSE-FIX-V05 — window.alert() chặn tương tác cho TRƯỜNG HỢP LỖI, đối xứng với
-      // alert thành công bên dưới — không thể nhầm "form vẫn còn hiện dữ liệu tôi vừa gõ" với "đã thêm
-      // thành công", vì CẢ HAI trường hợp giờ đều bắt buộc phải đọc 1 hộp thoại chặn trước khi làm gì tiếp.
       window.alert("KHÔNG thể thêm Custom Fixture: " + err);
       return;
     }
-    console.log("[CUSTOM TRACE 08] customForm BEFORE add (validate PASS):", JSON.stringify(customForm));
     const row = {
       id: generateCustomFixtureId(),
       type: "custom",
@@ -669,59 +550,35 @@ function Module1({
       flowCold: customForm.inputMode === "FLOW" ? parseDecimal(customForm.flowCold) : null,
       flowHot: customForm.inputMode === "FLOW" ? parseDecimal(customForm.flowHot) : null,
     };
-    console.log("[CUSTOM TRACE 09] custom row CREATED:", JSON.stringify(row));
-    // CUSTOM-FIXTURE-FINAL FIX — đổi sang functional update: setCustomFixtures(prev => [...prev, row])
-    // thay vì đọc `customFixtures` từ closure rồi set trực tiếp — cùng loại race condition đã sửa cho
-    // customForm nhưng trước đây BỎ SÓT ở đây. addCustomFixtureRow luôn dùng ĐÚNG giá trị customFixtures
-    // mới nhất tại thời điểm setState thực thi, không phụ thuộc closure của lần render lúc hàm được tạo.
+    
     let addedCount = 0;
     setCustomFixtures(prev => {
       const next = [...prev, row];
       addedCount = next.length;
-      console.log("[CUSTOM TRACE 10] customFixtures BEFORE (length=" + prev.length + "):", JSON.stringify(prev));
-      console.log("[CUSTOM TRACE 11] customFixtures AFTER (length=" + next.length + "):", JSON.stringify(next));
       return next;
     });
     setCalculated(false);
-    // CUSTOM-FIXTURE-ROOT-CAUSE-FIX-V05 — Xác nhận THÀNH CÔNG rõ ràng, không thể nhầm lẫn với trường hợp
-    // validate thất bại (form vẫn mở, vẫn hiện đúng dữ liệu vừa gõ trên màn hình — dễ khiến người dùng
-    // tưởng đã thêm thành công dù addCustomFixtureRow() đã return sớm ở nhánh lỗi bên trên, chưa hề gọi
-    // setCustomFixtures). window.alert() chặn tương tác, không thể bỏ sót — chỉ hiện khi setCustomFixtures
-    // ĐÃ THỰC SỰ được gọi.
     window.alert("Đã thêm Custom Fixture \"" + row.name + "\" (Qty=" + row.qty + ", FU Cold=" + row.fuCold + ", FU Hot=" + row.fuHot + ").");
     resetCustomForm();
     setCustomFormOpen(false);
   };
-
   const removeCustomRow = idx => { setCustomFixtures(prev => prev.filter((_, i) => i !== idx)); setCalculated(false); };
-
-  // STEP 29 (PART 8) — Edit custom fixture trực tiếp trên dòng bảng (không tách modal riêng, tối thiểu hoá
-  // thay đổi UI). Đổi inputMode: KHÔNG tự convert FU<->L/s bằng công thức giả định — chỉ đơn giản đổi field
-  // đang dùng, giá trị mode cũ giữ nguyên trong state nhưng không còn được tính (đã cảnh báo trong UI).
   const updateCustomFixtureRow = (idx, patch) => {
     setCustomFixtures(prev => {
       const copy = [...prev];
       copy[idx] = { ...copy[idx], ...patch };
-      console.log("[CUSTOM DEBUG] updateCustomFixtureRow(" + idx + ",", JSON.stringify(patch), ") -> dòng sau khi sửa:", JSON.stringify(copy[idx]));
       return copy;
     });
     setCalculated(false);
   };
-
   const canCalc = allFixtures.length > 0;
-
   return (
     <div className="max-w-5xl mx-auto px-5 py-8">
       <Logo title="Water Demand Assistant" />
-
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Left column */}
         <div className="space-y-6">
           <Card>
             <SectionTitle icon={Settings}>Project Settings</SectionTitle>
-            {/* Thứ tự chọn theo đúng phân cấp: Standard -> System Type (nếu Standard đó có) -> Flushing Type -> Water System.
-                Building Type giữ lại làm thông tin dự án (không ảnh hưởng phép tính Module 1),
-                đặt sau cùng để không phá vỡ phân cấp lựa chọn kỹ thuật chính. */}
             <Field label="Design Standard">
               <Select
                 value={standard}
@@ -762,8 +619,6 @@ function Module1({
             </Field>
           </Card>
         </div>
-
-        {/* Right column */}
         <div className="space-y-6">
           <Card>
             <SectionTitle icon={Droplet}>Add &amp; Edit Fixtures</SectionTitle>
@@ -865,13 +720,12 @@ function Module1({
               <button onClick={addRow} className="w-full mt-2 flex items-center justify-center gap-1.5 text-sm font-medium text-[#1F7A70] border border-dashed border-[#1F7A70]/40 rounded-xl py-2 hover:bg-[#F2FAF8]">
                 <Plus size={15} /> Add New Fixture
               </button>
-
               {customFormOpen ? (
                 <div className="mt-2 border border-[#1F7A70]/30 bg-[#F2FAF8] rounded-xl p-3 space-y-2">
                   <div className="text-xs font-semibold text-[#1F7A70]">Add Custom Fixture</div>
                   <input
                     type="text" value={customForm.name}
-                    onChange={e => { console.log("[CUSTOM TRACE 01] input name changed, giá trị mới:", JSON.stringify(e.target.value)); setCustomForm(prev => ({ ...prev, name: e.target.value })); }}
+                    onChange={e => setCustomForm(prev => ({ ...prev, name: e.target.value })) }
                     onInput={e => setCustomForm(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="Fixture Name"
                     className="w-full bg-white border border-[#E7E0CE] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/30"
@@ -879,14 +733,14 @@ function Module1({
                   <div className="grid grid-cols-2 gap-1.5">
                     <input
                       type="text" value={customForm.abbr}
-                      onChange={e => { console.log("[CUSTOM TRACE 02] input abbreviation changed, giá trị mới:", JSON.stringify(e.target.value)); setCustomForm(prev => ({ ...prev, abbr: e.target.value })); }}
+                      onChange={e => setCustomForm(prev => ({ ...prev, abbr: e.target.value })) }
                       onInput={e => setCustomForm(prev => ({ ...prev, abbr: e.target.value }))}
                       placeholder="Abbreviation"
                       className="bg-white border border-[#E7E0CE] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/30"
                     />
                     <input
                       type="number" min={0} value={customForm.qty}
-                      onChange={e => { console.log("[CUSTOM TRACE 03] quantity changed, giá trị mới:", JSON.stringify(e.target.value)); setCustomForm(prev => ({ ...prev, qty: e.target.value })); }}
+                      onChange={e => setCustomForm(prev => ({ ...prev, qty: e.target.value })) }
                       onInput={e => setCustomForm(prev => ({ ...prev, qty: e.target.value }))}
                       placeholder="Quantity"
                       className="bg-white border border-[#E7E0CE] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/30"
@@ -894,7 +748,7 @@ function Module1({
                   </div>
                   <select
                     value={customForm.inputMode}
-                    onChange={e => { console.log("[CUSTOM TRACE 04] input mode changed, giá trị mới:", JSON.stringify(e.target.value)); setCustomForm(prev => ({ ...prev, inputMode: e.target.value })); }}
+                    onChange={e => setCustomForm(prev => ({ ...prev, inputMode: e.target.value })) }
                     onInput={e => setCustomForm(prev => ({ ...prev, inputMode: e.target.value }))}
                     className="w-full bg-white border border-[#E7E0CE] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/30"
                   >
@@ -905,14 +759,14 @@ function Module1({
                     <div className="grid grid-cols-2 gap-1.5">
                       <input
                         type="text" inputMode="decimal" value={customForm.fuCold}
-                        onChange={e => { console.log("[CUSTOM TRACE 05] FU cold changed, giá trị mới:", JSON.stringify(e.target.value)); setCustomForm(prev => ({ ...prev, fuCold: e.target.value })); }}
+                        onChange={e => setCustomForm(prev => ({ ...prev, fuCold: e.target.value })) }
                         onInput={e => setCustomForm(prev => ({ ...prev, fuCold: e.target.value }))}
                         placeholder="FU Cold"
                         className="bg-white border border-[#E7E0CE] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/30"
                       />
                       <input
                         type="text" inputMode="decimal" value={customForm.fuHot}
-                        onChange={e => { console.log("[CUSTOM TRACE 06] FU hot changed, giá trị mới:", JSON.stringify(e.target.value)); setCustomForm(prev => ({ ...prev, fuHot: e.target.value })); }}
+                        onChange={e => setCustomForm(prev => ({ ...prev, fuHot: e.target.value })) }
                         onInput={e => setCustomForm(prev => ({ ...prev, fuHot: e.target.value }))}
                         placeholder="FU Hot"
                         className="bg-white border border-[#E7E0CE] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/30"
@@ -922,14 +776,14 @@ function Module1({
                     <div className="grid grid-cols-2 gap-1.5">
                       <input
                         type="text" inputMode="decimal" value={customForm.flowCold}
-                        onChange={e => { console.log("[CUSTOM TRACE 05b] Flow cold changed, giá trị mới:", JSON.stringify(e.target.value)); setCustomForm(prev => ({ ...prev, flowCold: e.target.value })); }}
+                        onChange={e => setCustomForm(prev => ({ ...prev, flowCold: e.target.value })) }
                         onInput={e => setCustomForm(prev => ({ ...prev, flowCold: e.target.value }))}
                         placeholder="Cold Water Flow (L/s)"
                         className="bg-white border border-[#E7E0CE] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/30"
                       />
                       <input
                         type="text" inputMode="decimal" value={customForm.flowHot}
-                        onChange={e => { console.log("[CUSTOM TRACE 06b] Flow hot changed, giá trị mới:", JSON.stringify(e.target.value)); setCustomForm(prev => ({ ...prev, flowHot: e.target.value })); }}
+                        onChange={e => setCustomForm(prev => ({ ...prev, flowHot: e.target.value })) }
                         onInput={e => setCustomForm(prev => ({ ...prev, flowHot: e.target.value }))}
                         placeholder="Hot Water Flow (L/s)"
                         className="bg-white border border-[#E7E0CE] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/30"
@@ -966,14 +820,12 @@ function Module1({
               )}
             </div>
           </Card>
-
           <PrimaryButton icon={Gauge} disabled={!canCalc} onClick={() => {
               setCalculated(true);
               if (logActivity) logActivity("calculate_demand", { standard, buildingType, waterSystem, totalFU, designFlow });
             }}>
             Calculate
           </PrimaryButton>
-
           <Card>
             <SectionTitle icon={TrendingUp}>Calculation Results</SectionTitle>
             <div className="grid grid-cols-2 gap-4">
@@ -1006,7 +858,6 @@ function Module1({
               </div>
             )}
           </Card>
-
           <div className="grid grid-cols-2 gap-3">
             <SecondaryButton icon={FileSpreadsheet} onClick={onExportExcel}>Export to Excel</SecondaryButton>
             <button
@@ -1023,17 +874,12 @@ function Module1({
     </div>
   );
 }
-
 /* ============================ Module 2 ============================ */
-
-// STEP 18 (Phương án B mở rộng): Module2 giờ cũng là "controlled component" — toàn bộ state riêng
-// (material, velocityMode, manualVelocity, building, result, flow) đã nâng lên App (xem App).
 function Module2({
   DB, standard, waterSystem, onGoto, onExportExcel,
   material, setMaterial, velocityMode, setVelocityMode, manualVelocity, setManualVelocity,
   building, setBuilding, result, flow, setFlowOverride,
-  velocitySystem, velCriteria, onCalculate,
-  logActivity, // ghi log hoạt động vào Supabase — giữ nguyên tính năng đã có trong bản deploy cũ
+  velocitySystem, velCriteria, onCalculate, logActivity // <-- Thêm logActivity
 }) {
   return (
     <div className="max-w-5xl mx-auto px-5 py-8">
@@ -1043,12 +889,9 @@ function Module2({
           <ArrowLeft size={14} /> Water Demand
         </button>
       </div>
-
       <div className="grid md:grid-cols-3 gap-6">
         <Card className="md:col-span-1">
           <SectionTitle icon={Settings}>Pipe Configuration</SectionTitle>
-          {/* STEP 17: hiển thị Standard/Water System từ shared design state (App) — luôn có sẵn,
-              không còn khái niệm "chưa nhận từ Module 1" vì không còn snapshot một chiều. */}
           <div className="mb-4 text-xs text-[#1F7A70] bg-[#EAF5F2] rounded-lg px-3 py-2">
             Standard: <strong>{standard}</strong> · Water System: <strong>{waterSystem}</strong>
           </div>
@@ -1074,9 +917,6 @@ function Module2({
                 type="number" step="0.1" value={manualVelocity}
                 onChange={e => {
                   const raw = e.target.value;
-                  // STEP 23: cho phép để trống khi đang gõ dở (VD xoá để nhập lại) — KHÔNG ép về 0,
-                  // vì 0 sẽ trở thành velocity limit=0 khiến app âm thầm chọn sai ống. calculatePipeDesign()
-                  // đã có guard riêng để không tính khi giá trị chưa hợp lệ.
                   setManualVelocity(raw === "" ? "" : parseFloat(raw));
                 }}
                 className="w-full bg-[#FAF7EF] border border-[#E7E0CE] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/30"
@@ -1094,13 +934,13 @@ function Module2({
             </p>
           )}
         </Card>
-
         <div className="md:col-span-2 space-y-6">
           <PrimaryButton icon={Gauge} onClick={() => {
               onCalculate();
               if (logActivity) logActivity("calculate_pipe", { material, flow, manualVelocity, building, velocityMode });
-            }}>Calculate Now</PrimaryButton>
-
+            }}>
+            Calculate Now
+          </PrimaryButton>
           <Card>
             <SectionTitle icon={Ruler}>Design Results</SectionTitle>
             {result?.noCriteria ? (
@@ -1109,7 +949,7 @@ function Module2({
               </div>
             ) : result?.invalidManualVelocity ? (
               <div className="text-sm text-[#B8791A] bg-[#FEF3DE] rounded-xl p-4">
-                Vui lòng nhập giá trị Manual Velocity hợp lệ (số &gt; 0) để tính Pipe Size.
+                Vui lòng nhập giá trị Manual Velocity hợp lệ (số > 0) để tính Pipe Size.
               </div>
             ) : result?.calcError ? (
               <div className="text-sm text-[#C13A3A] bg-[#FBE7E7] rounded-xl p-4">
@@ -1152,7 +992,6 @@ function Module2({
               )
             )}
           </Card>
-
           <div className="grid grid-cols-2 gap-3">
             <SecondaryButton icon={FileSpreadsheet} onClick={onExportExcel}>Export to Excel</SecondaryButton>
             <SecondaryButton icon={FileText}>View Full Report</SecondaryButton>
@@ -1162,27 +1001,19 @@ function Module2({
     </div>
   );
 }
-
-/* ============================ App ============================ */
-
 /* ============================ Excel import ============================ */
-
-// Đọc 1 sheet ra mảng-mảng (header:1), bỏ dòng trống đầu/cuối
 function sheetRows(wb, name) {
   const ws = wb.Sheets[name];
   if (!ws) return [];
   return XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
 }
-
 function parseWorkbook(wb) {
   const pipeSizes = sheetRows(wb, "Pipe_Sizes")
     .filter(r => r[0] != null && r[0] !== "ID")
     .map(r => ({ material: r[1], dn: r[4], od: r[5], id: r[6] }));
-
   const materials = sheetRows(wb, "Material")
     .filter(r => r[0] != null && r[0] !== "Material")
     .map(r => ({ material: r[0], c: r[1], roughness: r[3] }));
-
   const fixtures = sheetRows(wb, "Fixture Unit")
     .filter(r => r[0] != null && r[0] !== "Standard")
     .map(r => ({
@@ -1190,27 +1021,16 @@ function parseWorkbook(wb) {
       name: typeof r[2] === "string" ? r[2].trim() : r[2],
       abbr: r[3], fuCold: r[4], fuHot: r[5], fuTotal: r[6],
     }));
-
   const fu2flow = sheetRows(wb, "FU to flowrate")
     .filter(r => r[0] != null && r[0] !== "Standard")
     .map(r => ({ standard: r[0], type: r[1], fu: r[2], ls: r[4] }))
     .filter(r => typeof r.fu === "number");
-
   const velocity = sheetRows(wb, "Velocity Criteria")
     .filter(r => r[0] != null && r[0] !== "Standard")
     .map(r => ({ standard: r[0], building: r[1], system: r[2], recommended: r[3], maximum: r[4] }));
-
   return { pipeSizes, materials, fixtures, fu2flow, velocity };
 }
-
-// Khóa lưu trữ database cá nhân (shared:false) — chỉ người dùng hiện tại thấy được,
-// không phải database "Publish" dùng chung (chưa triển khai ở bước này theo đúng yêu cầu).
 const IMPORTED_DB_STORAGE_KEY = "imported-database-v1";
-
-/* ============================ STEP 11: Update JSX Source / Export JSX / Export HTML ============================ */
-
-// Giải mã base64 an toàn cho UTF-8 (btoa/atob gốc của trình duyệt không xử lý đúng ký tự ngoài Latin1,
-// ví dụ dấu tiếng Việt trong comment) — dùng đúng cặp encode/decode đối xứng với script build (Python) đã tạo 2 blob trên.
 function computeTotalFUForWaterSystem(fixtures, fixtureByKey, waterSystemChoice) {
   const isIneligible = f => {
     const a = (f.abbr || "").toString().toUpperCase();
@@ -1220,13 +1040,9 @@ function computeTotalFUForWaterSystem(fixtures, fixtureByKey, waterSystemChoice)
   const missing = [];
   for (const row of fixtures) {
     if (row.type === "custom") {
-      if (row.inputMode !== "FU") { console.log("[CUSTOM DEBUG] computeTotalFUForWaterSystem: bỏ qua row custom '" + row.name + "' vì inputMode=" + row.inputMode + " (không phải FU)"); continue; } // FLOW-mode: không cộng vào FU, xử lý riêng
+      if (row.inputMode !== "FU") { continue; } 
       const raw = waterSystemChoice === "Cold Water" ? row.fuCold : row.fuHot;
-      // CUSTOM-FIXTURE-FINAL FIX — thêm !Number.isFinite(raw): input FU giờ là type="text" (cho phép gõ
-      // dấu phẩy thập phân), nên khi đang sửa dòng đã Add (updateCustomFixtureRow, KHÔNG qua validate),
-      // giá trị có thể tạm thời là NaN (VD đang gõ dở "1."). Coi NaN như missing để KHÔNG lan NaN vào sum.
-      if (raw === null || raw === undefined || !Number.isFinite(raw)) { console.log("[CUSTOM DEBUG] computeTotalFUForWaterSystem: row custom '" + row.name + "' có " + (waterSystemChoice==="Cold Water"?"fuCold":"fuHot") + " = " + raw + " -> coi là MISSING, không cộng"); missing.push(row.id); continue; }
-      console.log("[CUSTOM DEBUG] computeTotalFUForWaterSystem: cộng custom '" + row.name + "' -> raw=" + raw + " x qty=" + row.qty + " = " + (raw*(row.qty||0)) + " vào " + waterSystemChoice);
+      if (raw === null || raw === undefined || !Number.isFinite(raw)) { missing.push(row.id); continue; }
       sum += raw * (row.qty || 0);
       continue;
     }
@@ -1241,40 +1057,22 @@ function computeTotalFUForWaterSystem(fixtures, fixtureByKey, waterSystemChoice)
   }
   return { total: missing.length > 0 ? null : sum, missing };
 }
-
-// STEP 29 — Custom fixture inputMode "FLOW": đóng góp Flow Rate (L/s) TRỰC TIẾP, KHÔNG quy đổi qua FU
-// (app hiện không có bất kỳ hệ số FU<->L/s chính thức nào — không được giả định). Cộng CỘNG THÊM vào
-// Design Flow đã tính từ FU (xem App: `designFlow`), không trộn vào phép tính interpolate() nào cả.
 function computeDirectFlowContribution(fixtures, waterSystemChoice) {
   let sum = 0;
   for (const row of fixtures) {
     if (row.type !== "custom" || row.inputMode !== "FLOW") continue;
     const raw = waterSystemChoice === "Cold Water" ? row.flowCold : row.flowHot;
-    // CUSTOM-FIXTURE-FINAL FIX — thêm !Number.isFinite(raw): inline edit không qua validate, giá trị
-    // có thể tạm thời NaN trong lúc gõ dở (xem giải thích ở computeTotalFUForWaterSystem).
     if (raw === null || raw === undefined || !Number.isFinite(raw)) continue;
     sum += raw * (row.qty || 0);
   }
   return sum;
 }
-
-// STEP 29 — ID duy nhất cho custom fixture, KHÔNG dùng tên/index làm khoá (tránh trùng lặp khi đổi tên
-// hoặc xoá/thêm dòng khác). Có fallback nếu môi trường không hỗ trợ crypto.randomUUID().
 function generateCustomFixtureId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return "custom-" + crypto.randomUUID();
   }
   return "custom-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
 }
-
-// STEP 27 — Hàm thuần, mirror CHÍNH XÁC logic của calculatePipeDesign() (App) nhưng nhận `waterSystemChoice`
-// làm tham số thay vì đọc `waterSystem` đang active — CẦN THIẾT vì file Excel mẫu (master format) yêu cầu
-// hiển thị ĐỒNG THỜI kết quả Pipe Sizing cho CẢ Cold Water LẪN Hot Water trên cùng 1 sheet, trong khi App
-// chỉ tính 1 kết quả cho water system đang chọn tại 1 thời điểm. Đây là DUY NHẤT 1 công thức (velocityMs,
-// headLossHW, pressureLossKPa, cùng logic chọn DN nhỏ nhất thoả limit, cùng cách phân loại PASS/WARNING/FAIL)
-// — chỉ gọi 2 lần với water system khác nhau, giống hệt cách computeTotalFUForWaterSystem() đã làm cho FU.
-// KHÔNG PHẢI công thức mới, KHÔNG suy diễn — nếu thiếu dữ liệu (Design Flow null, không có Material, Auto
-// mode mà DB không có Velocity Criteria...) trả về trạng thái rõ ràng, không bịa số.
 function computePipeResultForWaterSystem(db, standard, building, waterSystemChoice, material, velocityMode, manualVelocity, designFlow) {
   if (designFlow == null) return { na: true };
   const vs = waterSystemChoice === "Cold Water" ? "CW" : waterSystemChoice === "Hot Water" ? "HW" : null;
@@ -1309,79 +1107,40 @@ function computePipeResultForWaterSystem(db, standard, building, waterSystemChoi
   }
   return { dn: chosen.dn, od: chosen.od, id: chosen.id, velocity: chosen.velocity, headLoss: hf, pressureLoss: pLoss, status, velCriteria };
 }
-
-// Hàm thuần — CHỈ đọc từ đối tượng `data` (application state + database) được truyền vào, KHÔNG đọc DOM,
-// không hard-code Standard/Fixture/FU/Pipe Size/Velocity Criteria. Nếu 1 giá trị chưa có, ghi "N/A" —
-// không suy diễn/bịa số liệu.
-//
-// STEP 27 — Đổi từ 4 sheet sang ĐÚNG 1 sheet "Design Summary", bám theo file mẫu (master format) người
-// dùng cung cấp: Company/Project header -> Design Basis -> bảng Fixture -> 2 dòng tổng (Total FU +
-// Design Flow), MỖI dòng tổng đồng thời có kết quả Pipe Sizing cho 1 water system (Cold ở dòng "Total FU",
-// Hot ở dòng "Design Flow") — đã xác nhận bằng cách đối chiếu số liệu mẫu khớp đúng công thức hiện có cho
-// Cold Water (khớp tuyệt đối); Hot Water trong mẫu không khớp công thức thật — KHÔNG cố ép khớp, dùng số
-// tính thật, không sửa 1 dòng công thức nào.
-//
-// Quyết định cần bạn xác nhận lại (đã báo rõ trong report cuối): dòng "System Type" trong mẫu chứa giá trị
-// kiểu "Flush valve/ Flush tank" — khớp với khái niệm Flushing Type của app hơn là System Type (Small/
-// Medium/Large của BS EN) — nên tôi map "System Type" trong Excel -> `flushingType` của app. "Water System"
-// trong mẫu ghi "Cold Water/ Hot Water" (kiểu placeholder) -> tôi map thành giá trị waterSystem đang active
-// thực tế (1 giá trị, không phải chuỗi gộp).
 function exportDesignToExcel(data) {
   const {
     db, standard, buildingType, systemType, waterSystem, flushingType,
     fixtures: allFixtures, fixtureByKey,
     material, building, velocityMode, manualVelocity,
   } = data;
-
-  // STEP 28 (PART 7): log rõ ràng từng bước — giúp tự debug ngay trên browser thật (F12 → Console) nếu
-  // vẫn còn hiện tượng "không có gì xảy ra" sau khi bấm Export. KHÔNG spam console (chỉ 1 dòng/bước).
-  console.log("[Excel Export] Start");
-
-  // STEP 28 (PART 3/14): guard tường minh — nếu vì lý do gì đó (CDN load lỗi/chặn mạng) mà global XLSX
-  // không tồn tại, báo lỗi RÕ RÀNG ngay lập tức thay vì để lỗi mơ hồ ở bước dùng XLSX.* bên dưới.
   if (typeof XLSX === "undefined" || typeof XLSX.write !== "function" || typeof XLSX.utils === "undefined") {
-    console.error("[Excel Export] XLSX library không khả dụng (typeof XLSX =", typeof XLSX, ")");
     throw new Error("Thư viện XLSX chưa sẵn sàng (có thể do CDN chưa tải xong hoặc bị chặn mạng). Vui lòng tải lại trang và thử lại.");
   }
-  console.log("[Excel Export] XLSX available");
-
   const NA = "N/A";
   const fmtNum = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v)) ? NA : Number(v).toFixed(d);
-  // Cột "DN" trong file mẫu là SỐ (VD 50, 32), không phải chuỗi "DN50" như result.dn lưu trong App —
-  // chỉ tách phần số để hiển thị đúng layout mẫu, KHÔNG đổi cách lưu/tính DN trong app.
   const dnNumber = dn => {
     if (!dn) return null;
     const m = String(dn).match(/\d+(\.\d+)?/);
     return m ? Number(m[0]) : null;
   };
-
   const totalFUCold = computeTotalFUForWaterSystem(allFixtures, fixtureByKey, "Cold Water").total;
   const totalFUHot = computeTotalFUForWaterSystem(allFixtures, fixtureByKey, "Hot Water").total;
-
-  const flushTypeForFlow = flushingType; // Flushing Type dùng chung cho tra FU->Flow của cả 2 water system
-  // STEP 29 — Cộng thêm đóng góp Flow trực tiếp (L/s) từ custom fixture inputMode="FLOW" — giống hệt cách
-  // App tính designFlow (đã sửa ở Step 29), giữ đúng nguyên tắc "không suy diễn": nếu phần FU-based bị null
-  // (thiếu dữ liệu/ngoài khoảng DB), toàn bộ Design Flow vẫn null — không lặng lẽ bỏ qua phần FU để chỉ
-  // hiện phần Flow trực tiếp.
+  const flushTypeForFlow = flushingType; 
   const directFlowCold = computeDirectFlowContribution(allFixtures, "Cold Water");
   const directFlowHot = computeDirectFlowContribution(allFixtures, "Hot Water");
   const fuBasedFlowCold = totalFUCold == null ? null : interpolate(db.fu2flow, standard, flushTypeForFlow, totalFUCold);
   const fuBasedFlowHot = totalFUHot == null ? null : interpolate(db.fu2flow, standard, flushTypeForFlow, totalFUHot);
   const designFlowCold = fuBasedFlowCold == null ? null : fuBasedFlowCold + directFlowCold;
   const designFlowHot = fuBasedFlowHot == null ? null : fuBasedFlowHot + directFlowHot;
-
   const pipeCold = computePipeResultForWaterSystem(db, standard, building, "Cold Water", material, velocityMode, manualVelocity, designFlowCold);
   const pipeHot = computePipeResultForWaterSystem(db, standard, building, "Hot Water", material, velocityMode, manualVelocity, designFlowHot);
-
   const pipeCells = p => {
     if (!p || p.na || p.noCriteria || p.notFound || p.invalidManualVelocity) {
       return [NA, NA, NA, NA, NA, NA];
     }
     return [dnNumber(p.dn) ?? NA, p.od ?? NA, p.id ?? NA, fmtNum(p.velocity, 2), fmtNum(p.headLoss, 2), fmtNum(p.pressureLoss, 1)];
   };
-
   const issuedDate = new Date().toLocaleString();
-
   const aoa = [];
   aoa.push(["<Company Name>", ""]);
   aoa.push(["PROJECT NAME", ""]);
@@ -1392,18 +1151,14 @@ function exportDesignToExcel(data) {
   aoa.push(["Design Basis"]);
   aoa.push(["Design Standard", standard ?? NA]);
   aoa.push(["Building Type", buildingType ?? NA]);
-  aoa.push(["System Type", flushingType || NA]); // xem giải thích quyết định mapping ở comment trên hàm
+  aoa.push(["System Type", flushingType || NA]); 
   aoa.push(["Water System", waterSystem ?? NA]);
   aoa.push(["Material", material ?? NA]);
   aoa.push([]);
-  const HEADER_ROW_IDX = aoa.length; // 0-based, dùng để style header sau này
+  const HEADER_ROW_IDX = aoa.length; 
   aoa.push(["Fixture", "Abbreviation", "Quantity", "FU Cold water", "FU Hot water", "Total FU Cold", "Total FU Hot", "DN", "OD", "ID", "Velocity (m/s)", "Head Loss / 100m (m)", "Pressure Loss / 100m (kPa)"]);
-  const FIXTURE_START_IDX = aoa.length;
   allFixtures.forEach(row => {
     const qty = row.qty || 0;
-    // STEP 29 — Custom fixture: dùng đúng name/abbr/FU do người dùng tự khai, KHÔNG tra fixtureByKey.
-    // inputMode="FLOW": không có giá trị FU nào để hiện ở 4 cột FU — ghi "N/A", KHÔNG bịa giá trị FU giả
-    // (đóng góp Flow trực tiếp của nó đã được cộng vào dòng "Design Flow" tổng, không bị mất dữ liệu).
     if (row.type === "custom") {
       const label = row.name + (row.abbr ? ` (${row.abbr})` : "") + " [Custom]";
       if (row.inputMode === "FU") {
@@ -1418,7 +1173,7 @@ function exportDesignToExcel(data) {
       } else {
         aoa.push([
           label, row.abbr, qty,
-          NA, NA, NA, NA, // không có FU — inputMode là Flow trực tiếp
+          NA, NA, NA, NA, 
           "", "", "", "", "", "",
         ]);
       }
@@ -1432,36 +1187,25 @@ function exportDesignToExcel(data) {
       fu.fuHot == null ? NA : fu.fuHot,
       fu.fuCold == null ? NA : fu.fuCold * qty,
       fu.fuHot == null ? NA : fu.fuHot * qty,
-      "", "", "", "", "", "", // DN..PressureLoss: để trống trên dòng fixture — pipe sizing là kết quả
-                               // cho TỔNG Design Flow, không phải của riêng từng fixture (PART 4) — không bịa.
+      "", "", "", "", "", "", 
     ]);
   });
-  const FIXTURE_END_IDX = aoa.length - 1;
   aoa.push([]);
   const TOTAL_ROW_IDX = aoa.length;
   aoa.push(["Total FU", "", "", "", "", totalFUCold == null ? NA : totalFUCold, totalFUHot == null ? NA : totalFUHot, ...pipeCells(pipeCold)]);
   const FLOW_ROW_IDX = aoa.length;
   aoa.push(["Design Flow (l/s)", "", "", "", "", designFlowCold == null ? NA : fmtNum(designFlowCold, 3), designFlowHot == null ? NA : fmtNum(designFlowHot, 3), ...pipeCells(pipeHot)]);
-
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-  // STEP 27 (PART 7) — Column width bám theo mẫu (đã đọc trực tiếp từ file .xlsx mẫu bằng openpyxl).
   ws["!cols"] = [
     { wch: 34 }, { wch: 13 }, { wch: 10 }, { wch: 13 }, { wch: 11 },
     { wch: 12 }, { wch: 12 }, { wch: 7 }, { wch: 7 }, { wch: 7 },
     { wch: 14 }, { wch: 16 }, { wch: 18 },
   ];
-  // Row height cho các dòng có set riêng trong mẫu (1-based row index).
   ws["!rows"] = { 1: { hpx: 27 } };
   [2, 3, 4, 5, 7, 8, 9, 10, 11, 12].forEach(r => { ws["!rows"][r] = { hpx: 21 }; });
   ws["!rows"][HEADER_ROW_IDX + 1] = { hpx: 51 };
-
-  // STEP 27 — Cố gắng áp style (bold/italic) cho các dòng tiêu đề/tổng giống mẫu. LƯU Ý QUAN TRỌNG (đã ghi
-  // rõ trong report cuối): gói `xlsx` (SheetJS community) đang dùng KHÔNG đảm bảo hỗ trợ ghi style khi export
-  // — đây là giới hạn đã biết của thư viện, không phải lỗi logic. Vẫn set để tận dụng nếu bản thư viện hỗ trợ,
-  // không có tác dụng phụ nếu bị bỏ qua.
-  const boldRows = [1, 6, HEADER_ROW_IDX + 1]; // PROJECT NAME, Design Basis, header bảng fixture (0-based)
+  const boldRows = [1, 6, HEADER_ROW_IDX + 1]; 
   const boldItalicRows = [TOTAL_ROW_IDX, FLOW_ROW_IDX];
   const applyStyle = (rowIdx, style) => {
     for (let c = 0; c < 13; c++) {
@@ -1471,30 +1215,14 @@ function exportDesignToExcel(data) {
   };
   boldRows.forEach(r => applyStyle(r, { font: { name: "Calibri", sz: 12, bold: true } }));
   boldItalicRows.forEach(r => applyStyle(r, { font: { name: "Calibri", sz: 12, bold: true, italic: true } }));
-
   XLSX.utils.book_append_sheet(wb, ws, "Design Summary");
-  console.log("[Excel Export] Workbook created");
-
   const now = new Date();
   const pad = n => String(n).padStart(2, "0");
   const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}`;
-  // STEP 28 (PART 8): sanitize tường minh — loại bỏ mọi ký tự không hợp lệ trên tên file Windows/macOS
-  // (/ \ : * ? " < > |) dù filename hiện tại (chỉ chữ số, gạch dưới, gạch ngang) vốn đã an toàn — phòng
-  // thủ thêm cho trường hợp sau này filename được ghép thêm từ dữ liệu động khác (Project Name...).
   const rawFilename = `PipeDesignAssistant_${stamp}.xlsx`;
   const filename = rawFilename.replace(/[/\\:*?"<>|]/g, "_");
-
-  // STEP 26/28 (giữ nguyên cơ chế Step 26, thêm log chi tiết) — Blob + <a download> thủ công — đã chứng
-  // minh hoạt động ổn định trong môi trường Claude sandbox (dùng chung kỹ thuật với downloadTextFile()),
-  // không dùng XLSX.writeFile() nội bộ của SheetJS. Toàn bộ chuỗi dưới đây chạy ĐỒNG BỘ (không có await/
-  // setTimeout nào chen giữa click chuột của người dùng và a.click()) — giữ đúng "user gesture" để trình
-  // duyệt không coi đây là popup bị chặn.
   const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array", cellStyles: true });
-  console.log("[Excel Export] XLSX serialized, byteLength=", wbout.byteLength || wbout.length);
-
   const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-  console.log("[Excel Export] Blob created, size=", blob.size);
-
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -1503,15 +1231,11 @@ function exportDesignToExcel(data) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  console.log("[Excel Export] Download triggered, filename=", filename);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  console.log("[Excel Export] Cleanup complete");
 }
-
 function ImportBar({ onImport, usingCustom, onReset }) {
   const inputRef = useRef(null);
   const [msg, setMsg] = useState(null);
-
   const handleFile = async e => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1522,7 +1246,6 @@ function ImportBar({ onImport, usingCustom, onReset }) {
       if (db.pipeSizes.length === 0 || db.fixtures.length === 0) {
         throw new Error("Không tìm thấy đủ sheet (Pipe_Sizes, Fixture Unit...) trong file.");
       }
-      // Chỉ sau khi validate thành công mới cập nhật runtime DB + thử lưu vào personal storage.
       const persistResult = await onImport(db);
       const baseText = `Đã nạp: ${db.pipeSizes.length} pipe sizes, ${db.fixtures.length} fixtures, ${db.fu2flow.length} FU→Flow, ${db.velocity.length} velocity criteria.`;
       if (persistResult && persistResult.persisted) {
@@ -1531,13 +1254,11 @@ function ImportBar({ onImport, usingCustom, onReset }) {
         setMsg({ ok: true, text: `${baseText} ⚠ Lưu trữ thất bại — vẫn dùng được trong phiên này, nhưng sẽ mất khi tải lại trang.` });
       }
     } catch (err) {
-      // Import không hợp lệ -> KHÔNG đổi runtime DB (onImport chưa được gọi), báo lỗi rõ ràng.
       setMsg({ ok: false, text: "Lỗi đọc file: " + err.message });
     } finally {
       e.target.value = "";
     }
   };
-
   return (
     <div className="max-w-5xl mx-auto px-5 pt-5">
       <div className="flex flex-wrap items-center gap-3 bg-white/70 backdrop-blur border border-[#EDE6D6] rounded-2xl px-4 py-2.5">
@@ -1556,7 +1277,6 @@ function ImportBar({ onImport, usingCustom, onReset }) {
             <RotateCcw size={13} /> Dùng lại dữ liệu mặc định
           </button>
         )}
-        {/* Chỉ báo nguồn database — vị trí có sẵn, tái sử dụng nguyên trạng, không thêm UI mới */}
         <span className={`text-xs ${usingCustom ? "text-[#1F7A70]" : "text-[#B7BEB9]"}`}>
           {usingCustom ? "● Database: Imported" : "○ Database: Default"}
         </span>
@@ -1567,12 +1287,6 @@ function ImportBar({ onImport, usingCustom, onReset }) {
     </div>
   );
 }
-
-// STEP 10 — Migration tối thiểu cho ĐÚNG 1 lỗi chính tả Standard đã xác nhận cụ thể trong lịch sử dự án:
-// "AS NSZ" (bản Excel v3 cũ, có thể còn sót trong personal storage) -> "AS NZS" (đúng, từ v4 trở đi).
-// CHỈ thay giá trị chuỗi ở field `standard` của 3 mảng liên quan — KHÔNG đụng bất kỳ field kỹ thuật nào khác
-// (FU Cold/Hot, Demand L/s, Recommended/Maximum...). Không phải cơ chế chuẩn hoá Standard tổng quát,
-// không áp dụng cho bất kỳ chuỗi nào khác ngoài đúng cặp lỗi đã xác nhận này.
 function migrateStandardTypo(db) {
   if (!db) return db;
   const FIX = { "AS NSZ": "AS NZS" };
@@ -1590,12 +1304,6 @@ function migrateStandardTypo(db) {
       : db.velocity,
   };
 }
-
-// STEP 30 (PART 16) — Error Boundary: app hiện KHÔNG có bất kỳ cơ chế bắt lỗi render nào — bất kỳ exception
-// nào trong cây component (dù nhỏ, ở bất cứ đâu) khiến React unmount TOÀN BỘ cây, tạo ra đúng hiện tượng
-// "crash/trắng màn hình" đã báo cáo. Đây KHÔNG phải "che giấu lỗi bằng try/catch rộng" — Error Boundary
-// KHÔNG nuốt lỗi hay tiếp tục tính với dữ liệu sai; nó DỪNG render nhánh bị lỗi, hiển thị rõ thông báo +
-// chi tiết lỗi thật (console.error đầy đủ để debug), thay vì màn hình trắng không có thông tin gì.
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -1631,134 +1339,47 @@ class ErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
-
-/* ============================ Standard Mapping Modal ============================ */
-// Modal xác nhận mapping fixture khi đổi Standard (bổ sung theo yêu cầu — thay cho remap âm thầm cũ).
-// Mỗi dòng fixture Database đang dùng phải được người dùng tự chọn fixture tương ứng ở Standard mới,
-// hoặc để "Chưa chọn" (giữ nguyên như hành vi cũ khi không tìm được tương ứng). Qty không đổi.
-function StandardMappingModal({ pending, onConfirm, onCancel }) {
-  const [rows, setRows] = useState(() => (pending ? pending.rows.map(r => ({ ...r })) : []));
-
-  React.useEffect(() => {
-    setRows(pending ? pending.rows.map(r => ({ ...r })) : []);
-  }, [pending]);
-
-  if (!pending) return null;
-
-  const setRowChoice = (idx, fixtureId) => {
-    setRows(prev => prev.map((r, i) => (i === idx ? { ...r, selectedFixtureId: fixtureId } : r)));
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="bg-white rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.25)] border border-[#EDE6D6] p-6 max-w-lg w-full max-h-[85vh] overflow-y-auto">
-        <h2 className="text-base font-bold text-[#1F3B36] mb-1">Xác nhận Mapping Fixture</h2>
-        <p className="text-xs text-[#7D8B87] mb-4 leading-relaxed">
-          Đổi Standard từ <strong className="text-[#243B36]">{pending.fromStandard || "(chưa chọn)"}</strong> sang{" "}
-          <strong className="text-[#243B36]">{pending.toStandard || "(chưa chọn)"}</strong>. Vui lòng chọn fixture
-          tương ứng ở Standard mới cho từng dòng bên dưới — Qty sẽ được giữ nguyên. Dòng nào để "Chưa chọn" sẽ
-          giữ nguyên fixture cũ (cần chọn lại thủ công sau).
-        </p>
-        <div className="space-y-3 mb-5">
-          {rows.map((row, idx) => (
-            <div key={idx} className="border border-[#E7E0CE] rounded-xl p-3 bg-[#FAF7EF]">
-              <div className="text-xs text-[#7D8B87] mb-1">
-                Fixture cũ: <span className="font-medium text-[#243B36]">{row.oldLabel}</span>
-                {" · "}Qty: <span className="font-medium text-[#243B36]">{row.qty}</span>
-              </div>
-              <Select
-                value={row.selectedFixtureId}
-                onChange={v => setRowChoice(idx, v)}
-                options={[
-                  { value: "", label: "— Chưa chọn / Bỏ qua —" },
-                  ...pending.candidateOptions.map(o => ({ value: o.fixtureId, label: o.label })),
-                ]}
-              />
-            </div>
-          ))}
-          {rows.length === 0 && (
-            <p className="text-xs text-[#7D8B87]">Không có fixture Database nào cần mapping.</p>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <SecondaryButton onClick={onCancel}>Hủy (giữ Standard cũ)</SecondaryButton>
-          <PrimaryButton onClick={() => onConfirm(rows)}>Xác nhận & Áp dụng</PrimaryButton>
-        </div>
-      </div>
-    </div>
-  );
-}
-
+// ==== THAY ĐỔI: MAIN APP BỌC TRONG GIAO DIỆN AUTH ====
 function MainApp({ user, trialDaysLeft, onLogout }) {
   const [screen, setScreen] = useState("m1");
   const [db, setDb] = useState(DEFAULT_DB);
   const [usingCustom, setUsingCustom] = useState(false);
-  // LOG HOẠT ĐỘNG NGƯỜI DÙNG VÀO SUPABASE (giữ nguyên tính năng đã có trong bản deploy cũ)
+  // LOG HOẠT ĐỘNG NGƯỜI DÙNG VÀO SUPABASE
   const logActivityToSupabase = async (action, details) => {
     if (!supabase || !user) return;
     try {
       await supabase.from('user_activity').insert([
-        {
-          email: user.email,
-          action: action,
-          details: JSON.stringify(details),
-          created_at: new Date().toISOString()
+        { 
+          email: user.email, 
+          action: action, 
+          details: JSON.stringify(details), 
+          created_at: new Date().toISOString() 
         }
       ]);
     } catch (err) {
       console.error("Supabase log error:", err);
     }
   };
-
-  // ==================== STEP 17 (Phương án B): SHARED DESIGN STATE ====================
-  // Nâng toàn bộ design state của Module 1 lên App để không bị mất khi Module1 unmount/remount
-  // lúc chuyển qua lại với Module 2 (root cause đã xác định ở debug trước: App dùng ternary
-  // `screen === "m1" ? <Module1/> : <Module2/>` khiến Module1 unmount hoàn toàn khi rời màn hình).
-  //
-  // STEP 5: "IPC" ở đây chỉ là giá trị khởi tạo tạm (seed) cho lần App mount đầu tiên,
-  // KHÔNG phải danh sách lựa chọn hard-code — effect bên dưới tự sửa nếu "IPC" không có trong DB.
   const [standard, setStandard] = useState("IPC");
   const [buildingType, setBuildingType] = useState("Hotel");
   const [systemType, setSystemType] = useState("");
   const [waterSystem, setWaterSystem] = useState("Cold Water");
   const [flushingType, setFlushingType] = useState("");
-  // STEP 15: lazy initializer — chỉ chạy ĐÚNG 1 LẦN lúc App mount thật sự (VD reload trang, CASE C) —
-  // vì App không còn unmount/remount khi chuyển Module, chuyển qua lại Module1<->Module2 (CASE B)
-  // sẽ KHÔNG chạy lại initializer này, tự động thoả đúng yêu cầu "không reseed khi chỉ điều hướng".
-  // CUSTOM-FIXTURE-ARCHITECTURE-V04-2026-08-15 — Tách VẬT LÝ 2 state riêng biệt (không còn 1 mảng chung
-  // dùng discriminator `type` để phân biệt): dbFixtures (chỉ fixture Database) và customFixtures (chỉ
-  // fixture người dùng tự khai). Effect đổi Standard/SystemType (bên dưới) CHỈ được truyền setDbFixtures —
-  // về mặt kiến trúc, KHÔNG THỂ chạm vào customFixtures dù vô tình hay cố ý, vì không hề có tham chiếu tới
-  // setCustomFixtures ở đó. `fixtures` (dùng cho toàn bộ tính toán/Module2/Excel export phía dưới, y hệt
-  // trước đây) giờ là giá trị DẪN XUẤT (derived), không phải state gốc.
+  
   const [dbFixtures, setDbFixtures] = useState(() => buildInitialFixtureRows(DEFAULT_DB, "IPC", ""));
   const [customFixtures, setCustomFixtures] = useState([]);
   const allFixtures = useMemo(() => [...dbFixtures, ...customFixtures], [dbFixtures, customFixtures]);
   const [calculated, setCalculated] = useState(false);
-
-  // ==== STANDARD-CHANGE MAPPING MODAL (bổ sung theo yêu cầu) ====
-  // Trước đây: đổi Standard tự remap ÂM THẦM theo exact-match tên+abbr, không hỏi người dùng.
-  // Giờ: đổi Standard mở modal xác nhận — người dùng tự chọn fixture mới tương ứng cho từng dòng
-  // fixture Database đang dùng, KHÔNG tự động gán khi tên chỉ gần giống, Qty luôn giữ nguyên.
-  // customFixtures TUYỆT ĐỐI không bị đụng tới ở đây (giữ đúng nguyên tắc kiến trúc cũ).
-  const [pendingStandardChange, setPendingStandardChange] = useState(null);
-  const dbFixturesRef = React.useRef(dbFixtures);
-  React.useEffect(() => { dbFixturesRef.current = dbFixtures; }, [dbFixtures]);
-
-  // STEP 5 — DANH SÁCH ĐỘNG: Design Standard lấy DISTINCT giá trị từ DB.fixtures[].standard.
   const standardOptions = useMemo(() => {
     const set = new Set();
     db.fixtures.forEach(f => { if (f.standard) set.add(f.standard); });
     return Array.from(set);
   }, [db]);
-
   React.useEffect(() => {
     if (standardOptions.length > 0 && !standardOptions.includes(standard)) {
       setStandard(standardOptions[0]);
     }
-  }, [standardOptions]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // STEP 5 — System Type: DISTINCT theo Standard đang chọn.
+  }, [standardOptions]); 
   const systemTypeOptions = useMemo(() => {
     const set = new Set();
     db.fixtures.forEach(f => {
@@ -1766,147 +1387,65 @@ function MainApp({ user, trialDaysLeft, onLogout }) {
     });
     return Array.from(set);
   }, [db, standard]);
-
   React.useEffect(() => {
     if (systemTypeOptions.length > 0 && !systemTypeOptions.includes(systemType)) {
       setSystemType(systemTypeOptions[0]);
     } else if (systemTypeOptions.length === 0 && systemType !== "") {
       setSystemType("");
     }
-  }, [systemTypeOptions]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // STEP 5 — Flushing Type: DISTINCT theo Standard đang chọn.
+  }, [systemTypeOptions]); 
   const flushingTypeOptions = useMemo(() => {
     const set = new Set();
     db.fu2flow.forEach(r => { if (r.standard === standard && r.type) set.add(r.type); });
     return Array.from(set);
   }, [db, standard]);
-
   React.useEffect(() => {
     if (flushingTypeOptions.length > 0 && !flushingTypeOptions.includes(flushingType)) {
       setFlushingType(flushingTypeOptions[0]);
     }
-  }, [flushingTypeOptions]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Composite key ổn định cho fixture (Standard+SystemType+FixtureType+Abbr) — không đổi công thức,
-  // chỉ chuyển vị trí từ Module1 lên App cùng với availableFixtures.
+  }, [flushingTypeOptions]); 
   const fixtureKey = f => `${f.standard}||${f.systemType ?? ""}||${f.name ?? ""}||${f.abbr ?? ""}`;
-
   const availableFixtures = useMemo(() => {
     return db.fixtures
       .filter(f => f.standard === standard && (systemTypeOptions.length === 0 || f.systemType === systemType))
       .map(f => ({ ...f, _key: fixtureKey(f) }));
   }, [db, standard, systemType, systemTypeOptions]);
-
   const fixtureByKey = useMemo(() => {
     const map = {};
     availableFixtures.forEach(f => { map[f._key] = f; });
     return map;
   }, [availableFixtures]);
-
-  // CUSTOM-FIXTURE-ARCHITECTURE-V04 — Effect này giờ CHỈ nhận setDbFixtures, KHÔNG hề có tham chiếu tới
-  // setCustomFixtures — về mặt kiến trúc, tuyệt đối không thể ảnh hưởng tới customFixtures dù logic bên
-  // trong có lỗi gì đi nữa. Giữ đúng yêu cầu "đổi Standard chỉ rebuild DB fixtures, giữ nguyên quantity đã
-  // nhập": remap từng dòng DB hiện có sang Standard mới theo identity name+abbr (parse trực tiếp từ
-  // fixtureId cũ, không dùng fixtureByKey vì nó đã đổi theo Standard mới ngay khi re-render), giữ nguyên
-  // qty. Fixture nào không tồn tại ở Standard mới: KHÔNG bịa, KHÔNG xoá âm thầm — giữ nguyên fixtureId cũ
-  // (UI hiện tại đã xử lý an toàn, hiện "Chọn fixture").
-  // STEP: prevStandardRef/prevSystemTypeRef thay cho prevKeyRef cũ — cần tách riêng 2 giá trị để
-  // có thể REVERT dropdown về đúng giá trị trước đó nếu người dùng bấm Hủy ở modal mapping.
-  const prevStandardRef = React.useRef(standard);
-  const prevSystemTypeRef = React.useRef(systemType);
+  const prevKeyRef = React.useRef(`${standard}|${systemType}`);
   React.useEffect(() => {
     const key = `${standard}|${systemType}`;
-    const prevKey = `${prevStandardRef.current}|${prevSystemTypeRef.current}`;
-    if (prevKey !== key) {
-      const curDb = dbFixturesRef.current;
-      if (curDb.length === 0) {
-        // Không có fixture Database nào đang dùng -> không có gì để mapping -> chuyển thẳng, không cần modal.
-        prevStandardRef.current = standard;
-        prevSystemTypeRef.current = systemType;
-        setDbFixtures(buildInitialFixtureRows(db, standard, systemType));
-        setCalculated(false);
-        return;
-      }
-      const newStdFixtures = db.fixtures.filter(
-        f => f.standard === standard && (f.systemType ?? "") === (systemType ?? "")
-      );
-      const candidateOptions = newStdFixtures.map(f => ({
-        fixtureId: `${f.standard}||${f.systemType ?? ""}||${f.name ?? ""}||${f.abbr ?? ""}`,
-        label: `${f.name ?? ""}${f.abbr ? ` (${f.abbr})` : ""}`,
-      }));
-      const rows = curDb.map(row => {
-        const parts = (row.fixtureId || "").split("||");
-        const oldName = parts[2] ?? "";
-        const oldAbbr = parts[3] ?? "";
-        // Gợi ý CHỈ khi khớp CHÍNH XÁC tên+abbr (không fuzzy) — người dùng vẫn phải tự bấm Xác nhận,
-        // đây chỉ là điền sẵn giúp đỡ thao tác, không phải tự động quyết định âm thầm.
-        const exactMatch = newStdFixtures.find(f => (f.name ?? "") === oldName && (f.abbr ?? "") === oldAbbr);
-        const suggestedFixtureId = exactMatch
-          ? `${exactMatch.standard}||${exactMatch.systemType ?? ""}||${exactMatch.name ?? ""}||${exactMatch.abbr ?? ""}`
-          : "";
-        return {
-          oldFixtureId: row.fixtureId,
-          oldLabel: `${oldName}${oldAbbr ? ` (${oldAbbr})` : ""}` || "(không rõ tên)",
-          qty: row.qty,
-          selectedFixtureId: suggestedFixtureId,
-        };
-      });
-      setPendingStandardChange({
-        fromStandard: prevStandardRef.current,
-        fromSystemType: prevSystemTypeRef.current,
-        toStandard: standard,
-        toSystemType: systemType,
-        candidateOptions,
-        rows,
-      });
-      // CHƯA setDbFixtures, CHƯA cập nhật prevStandardRef/prevSystemTypeRef, CHƯA setCalculated(false) —
-      // đợi người dùng xác nhận trong modal. customFixtures vẫn KHÔNG bị đụng tới ở bất kỳ nhánh nào.
-    }
-  }, [standard, systemType]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const confirmStandardMapping = (rows) => {
-    if (!pendingStandardChange) return;
-    setDbFixtures(prevDb =>
-      prevDb.map((row, idx) => {
-        const chosen = rows[idx] && rows[idx].selectedFixtureId;
-        if (chosen) {
-          return { ...row, fixtureId: chosen }; // GIỮ NGUYÊN qty
+    if (prevKeyRef.current !== key) {
+      prevKeyRef.current = key;
+      setDbFixtures(prevDb => {
+        if (prevDb.length === 0) {
+          return buildInitialFixtureRows(db, standard, systemType);
         }
-        return row; // để trống -> giữ nguyên fixtureId cũ, không bịa, không xoá (giống hành vi cũ khi không có match)
-      })
-    );
-    prevStandardRef.current = pendingStandardChange.toStandard;
-    prevSystemTypeRef.current = pendingStandardChange.toSystemType;
-    setCalculated(false);
-    setPendingStandardChange(null);
-    // customFixtures KHÔNG được chạm vào ở đây.
-  };
-
-  const cancelStandardMapping = () => {
-    if (!pendingStandardChange) return;
-    // Hủy -> quay lại đúng Standard/System Type trước đó, KHÔNG áp dụng gì cả.
-    setStandard(pendingStandardChange.fromStandard);
-    setSystemType(pendingStandardChange.fromSystemType);
-    setPendingStandardChange(null);
-  };
-
-  // STEP 4: quy tắc WC/UR không đóng góp Hot Water FU — không đổi logic, chỉ chuyển vị trí lên App.
+        const newStdFixtures = db.fixtures.filter(
+          f => f.standard === standard && (f.systemType ?? "") === (systemType ?? "")
+        );
+        return prevDb.map(row => {
+          const parts = (row.fixtureId || "").split("||");
+          const oldName = parts[2] ?? "";
+          const oldAbbr = parts[3] ?? "";
+          const match = newStdFixtures.find(f => (f.name ?? "") === oldName && (f.abbr ?? "") === oldAbbr);
+          if (match) {
+            const newFixtureId = `${match.standard}||${match.systemType ?? ""}||${match.name ?? ""}||${match.abbr ?? ""}`;
+            return { ...row, fixtureId: newFixtureId }; 
+          }
+          return row; 
+        });
+      });
+      setCalculated(false);
+    }
+  }, [standard, systemType]); 
   const isHotWaterIneligible = f => {
     const a = (f.abbr || "").toString().toUpperCase();
     return a.startsWith("WC") || a.startsWith("UR");
   };
-
-  // STEP 29 FIX — Refactor: dùng lại ĐÚNG computeTotalFUForWaterSystem() (đã hỗ trợ custom fixture) thay vì
-  // duy trì 1 bản logic FU riêng trùng lặp trong App — giảm rủi ro 2 nơi tính lệch nhau, không đổi kết quả
-  // cho fixture Database (đã test — xem báo cáo cuối).
-  // STEP 32 FIX — ROOT CAUSE THẬT: computeTotalFUForWaterSystem() trả về { total, missing } nhưng dòng
-  // destructuring dưới đây trước đó viết { totalFU, missingFuKeys } — SAI TÊN THUỘC TÍNH (object trả về
-  // không có field "totalFU"/"missingFuKeys" nào cả) khiến cả 2 biến luôn là `undefined`, sau đó
-  // `missingFuKeys.length` trong Module1 throw "Cannot read properties of undefined (reading 'length')".
-  // Sửa bằng alias destructuring đúng tên field thật.
-  // V08 HARDENING: tính DB và Custom ở 2 pipeline độc lập rồi cộng ở App.
-  // Custom FU không phụ thuộc vào fixtureByKey/tra DB.
   const dbFUResult = useMemo(
     () => computeTotalFUForWaterSystem(dbFixtures, fixtureByKey, waterSystem),
     [dbFixtures, fixtureByKey, waterSystem]
@@ -1924,93 +1463,38 @@ function MainApp({ user, trialDaysLeft, onLogout }) {
     [dbFUResult.missing, customFUResult.missing]
   );
   const customFUContribution = customFUResult.total == null ? null : customFUResult.total;
-
-  React.useEffect(() => {
-    console.log('[CUSTOM V08 CALC] customFixtures=', JSON.stringify(customFixtures));
-    console.log('[CUSTOM V08 CALC] customFUContribution=', customFUContribution,
-      '| dbTotalFU=', dbFUResult.total, '| totalFU=', totalFU, '| waterSystem=', waterSystem);
-  }, [customFixtures, customFUContribution, dbFUResult.total, totalFU, waterSystem]);
-
-  // STEP 29 — Đóng góp Flow trực tiếp (L/s) từ custom fixture inputMode="FLOW" — CỘNG THÊM sau khi đã có
-  // Design Flow từ FU (không trộn vào interpolate()).
   const directFlowContribution = useMemo(
     () => computeDirectFlowContribution(allFixtures, waterSystem),
     [allFixtures, waterSystem]
   );
-
   const designFlow = useMemo(() => {
     if (totalFU == null) return null;
     const fuBasedFlow = interpolate(db.fu2flow, standard, flushingType, totalFU);
-    if (fuBasedFlow == null) return null; // giữ đúng behavior cũ: FU ngoài khoảng DB -> vẫn null, không suy diễn
+    if (fuBasedFlow == null) return null; 
     return fuBasedFlow + directFlowContribution;
   }, [db, standard, flushingType, totalFU, directFlowContribution]);
-
-  // CUSTOM-FIXTURE-FORENSIC-FIX-V03-2026-08-15 (PART 5) — Forensic instrumentation ĐẶT TRONG useEffect
-  // PHỤ THUỘC TRỰC TIẾP fixtures/totalFU/designFlow — KHÔNG log trong closure cũ, để chứng minh state
-  // THỰC SỰ đã đổi (effect này tự re-fire mỗi khi các state đó thay đổi giá trị, không phải mỗi render).
-  React.useEffect(() => {
-    const totalFUCold = computeTotalFUForWaterSystem(allFixtures, fixtureByKey, "Cold Water").total;
-    const totalFUHot = computeTotalFUForWaterSystem(allFixtures, fixtureByKey, "Hot Water").total;
-    const dfCold = totalFUCold == null ? null : interpolate(db.fu2flow, standard, flushingType, totalFUCold);
-    const dfHot = totalFUHot == null ? null : interpolate(db.fu2flow, standard, flushingType, totalFUHot);
-    console.log("[CUSTOM TRACE 12] allFixtures CURRENT (length=" + allFixtures.length + "):", JSON.stringify(allFixtures));
-    console.log("[CUSTOM TRACE 13] custom fixtures CURRENT (length=" + allFixtures.filter(r => r.type === "custom").length + "):", JSON.stringify(allFixtures.filter(r => r.type === "custom")));
-    console.log("[CUSTOM TRACE 14] totalFU Cold =", totalFUCold, "| (waterSystem active hiện tại =" + waterSystem + ", totalFU active =" + totalFU + ")");
-    console.log("[CUSTOM TRACE 15] totalFU Hot =", totalFUHot);
-    console.log("[CUSTOM TRACE 16] designFlow Cold =", dfCold);
-    console.log("[CUSTOM TRACE 17] designFlow Hot =", dfHot);
-  }, [allFixtures, totalFU, designFlow, standard, flushingType, waterSystem, db, fixtureByKey]);
-
   const fuRange = useMemo(() => getFuRange(db.fu2flow, standard, flushingType), [db, standard, flushingType]);
-
   const outOfRange = useMemo(() => {
     if (totalFU == null || !fuRange) return null;
     if (totalFU < fuRange.min) return "below";
     if (totalFU > fuRange.max) return "above";
     return null;
   }, [totalFU, fuRange]);
-  // ==================== HẾT SHARED DESIGN STATE (MODULE 1) ====================
-
-  // ==================== STEP 18: SHARED DESIGN STATE (MODULE 2) ====================
-  // Nâng toàn bộ state riêng của Module2 lên App, cùng lý do với Module1 ở Step 17 — Module2 cũng
-  // unmount/remount qua ternary `screen === "m1" ? ... : ...`, nên state sống trong Module2 sẽ mất
-  // mỗi lần rời màn hình. Đưa lên App để "App = single source of truth cho toàn bộ design hiện tại".
   const [material, setMaterial] = useState("HDPE");
   const [velocityMode, setVelocityMode] = useState("Auto");
   const [manualVelocity, setManualVelocity] = useState(2.0);
-  // PHẦN 2 (đúng yêu cầu): `building` ở đây là "Velocity Criteria building" của Module 2 —
-  // KHÁC HOÀN TOÀN với `buildingType` (Module 1, "Building Type của thiết kế") đã khai báo ở trên.
-  // Không gộp/đổi tên/thay thế 2 field này.
   const [building, setBuilding] = useState("Hotel");
   const [result, setResult] = useState(null);
-  // `flowOverride`: null nghĩa là Flow đang TỰ ĐỘNG theo designFlow mới nhất từ Module 1 (luôn cập nhật
-  // ngay cả khi không điều hướng qua lại). Nếu người dùng tự gõ số vào ô Flow ở Module 2, override này
-  // được lưu lại (persist đúng theo yêu cầu "không mất dữ liệu"), và sẽ không tự đổi theo designFlow nữa
-  // cho tới khi người dùng tự xoá override. Đây là thiết kế tối thiểu để vừa giữ được hành vi cũ (tự động
-  // lấy đúng Design Flow mới nhất khi mới sang Module 2) vừa không mất input người dùng khi điều hướng qua lại.
   const [flowOverride, setFlowOverride] = useState(null);
   const flow = flowOverride ?? designFlow ?? 4.82;
-
   const materialInfo = useMemo(() => db.materials.find(m => m.material === material), [db, material]);
-
-  // STEP 22 FIX — Đã audit toàn bộ pipeline (Excel raw sạch, parser đúng, DEFAULT_DB đúng 24/12 HW,
-  // field name khớp "system", mapping/lookup logic đúng cấu trúc) nhưng bạn vẫn báo lỗi thực tế sau khi
-  // Reset + Import lại. Để loại trừ HOÀN TOÀN mọi khả năng lệch khoảng trắng/hoa-thường (dù chưa thấy
-  // qua audit tĩnh) làm chắc chắn 100% theo đúng yêu cầu — xây lookup ROBUST bằng normalize 2 chiều
-  // (cả giá trị trong DB lẫn giá trị runtime), KHÔNG đổi ý nghĩa CW/HW, KHÔNG hard-code Standard,
-  // KHÔNG fallback HW->CW.
   const normalizeToken = v => String(v ?? "").trim().toUpperCase();
-
-  // Mapping CW/HW an toàn: chấp nhận cả "Cold Water"/"Hot Water" (giá trị UI hiện dùng) LẪN "CW"/"HW"
-  // trực tiếp (phòng trường hợp kiến trúc sau này truyền thẳng mã hệ thống) — không hard-code IPC,
-  // không để lọt trường hợp Hot Water -> null hay Hot Water -> CW.
   const velocitySystem = useMemo(() => {
     const w = normalizeToken(waterSystem);
     if (w === "COLD WATER" || w === "CW") return "CW";
     if (w === "HOT WATER" || w === "HW") return "HW";
     return null;
   }, [waterSystem]);
-
   const velCriteria = useMemo(() => {
     if (!velocitySystem) return undefined;
     const nStandard = normalizeToken(standard);
@@ -2021,37 +1505,9 @@ function MainApp({ user, trialDaysLeft, onLogout }) {
       normalizeToken(v.system) === velocitySystem
     );
   }, [db, standard, building, velocitySystem]);
-
-  // STEP 10 FIX — Root cause: trước đây `if (!velCriteria) return` chặn TOÀN BỘ việc chọn Pipe Size
-  // bất kể velocityMode, khiến Hot Water (DB hiện không có Velocity Criteria Hot Water cho bất kỳ Standard
-  // nào) không bao giờ ra được Pipe Size, kể cả khi Manual Velocity đang bật (Manual Velocity vốn KHÔNG
-  // cần velCriteria để chọn DN — chỉ cần để phân loại PASS/WARNING/FAIL).
-  // Tách rõ 2 việc độc lập:
-  //  (1) Xác định `limit` để CHỌN Pipe Size: Auto BẮT BUỘC cần velCriteria.recommended (nếu DB không có,
-  //      Auto mode thực sự không xác định được limit — đúng, không suy diễn); Manual dùng đúng giá trị
-  //      người dùng nhập, KHÔNG cần velCriteria — đây chính là mục đích của Manual Velocity.
-  //  (2) Phân loại PASS/WARNING/FAIL: LUÔN cần velCriteria (không suy diễn/mượn criteria khác) — nếu thiếu,
-  //      Pipe Size/Velocity/Head Loss/Pressure Loss vẫn hiển thị bình thường, chỉ riêng Status = không xác định.
-  // STEP 23 FIX — Trace thực tế phát hiện (không chỉ suy đoán):
-  //  (1) `materialInfo.c` được truy cập trực tiếp không guard — nếu `materialInfo` là `undefined`
-  //      (material đang chọn không khớp bất kỳ dòng nào trong db.materials), dòng này THROW
-  //      `Cannot read properties of undefined (reading 'c')` NGAY TRONG useEffect (không có Error Boundary
-  //      nào bọc App) -> React unmount toàn bộ cây -> đúng hiện tượng "trang trắng" đã báo cáo.
-  //  (2) `manualVelocity` được dùng thẳng làm `limit` không kiểm tra hợp lệ — nếu người dùng đang gõ dở
-  //      (input rỗng) hoặc nhập giá trị không phải số, `limit` có thể là NaN, khiến `v <= limit` luôn false,
-  //      không tự crash nhưng cho kết quả sai lệch (luôn chọn ống lớn nhất) một cách âm thầm.
-  // Sửa cả 2: thêm guard tường minh cho materialInfo trước khi tính; validate manualVelocity chặt chẽ
-  // (chấp nhận input rỗng khi đang gõ, KHÔNG ép về 0 khiến limit sai) và không chạy phép tính pipe sizing
-  // cho tới khi có 1 số hợp lệ > 0; bọc toàn bộ phần tính toán số học (không phải toàn component) trong
-  // try/catch để BẤT KỲ lỗi runtime chưa lường trước nào trong chuỗi này cũng không bao giờ làm crash cả
-  // trang — thay vào đó trả về 1 trạng thái lỗi rõ ràng, hiển thị được, không che giấu root cause (vẫn
-  // console.error để debug được), chỉ ngăn nó phá UI.
   const calculatePipeDesign = () => {
     try {
       if (velocityMode === "Auto" && !velCriteria) { setResult({ noCriteria: true }); return; }
-
-      // Manual Velocity: KHÔNG ép giá trị rỗng/không hợp lệ thành 0 (0 sẽ khiến limit=0, chọn sai âm thầm).
-      // Nếu Manual đang chọn nhưng chưa có số hợp lệ > 0, dừng lại với trạng thái rõ ràng, không tính bừa.
       if (velocityMode === "Manual") {
         const mv = Number(manualVelocity);
         if (manualVelocity === "" || manualVelocity === null || !Number.isFinite(mv) || mv <= 0) {
@@ -2059,12 +1515,9 @@ function MainApp({ user, trialDaysLeft, onLogout }) {
           return;
         }
       }
-
       if (!materialInfo) { setResult({ notFound: true }); return; }
-
       const sizes = db.pipeSizes.filter(p => p.material === material).sort((a, b) => a.od - b.od);
       const limit = velocityMode === "Auto" ? velCriteria.recommended : Number(manualVelocity);
-
       let chosen = null;
       for (const p of sizes) {
         const v = velocityMs(flow, p.id);
@@ -2075,92 +1528,46 @@ function MainApp({ user, trialDaysLeft, onLogout }) {
         chosen = { ...last, velocity: velocityMs(flow, last.id) };
       }
       if (!chosen) { setResult({ notFound: true }); return; }
-
       const hf = headLossHW(flow, chosen.id, materialInfo.c, 100);
       const pLoss = pressureLossKPa(hf);
-
-      // Status CHỈ tính được khi có velCriteria — nếu không có (VD Manual Velocity + Hot Water chưa có
-      // criteria trong DB), status = null, KHÔNG suy diễn/mượn criteria khác.
       let status = null;
       if (velCriteria) {
         status = "PASS";
         if (chosen.velocity > velCriteria.maximum) status = "FAIL";
         else if (chosen.velocity > velCriteria.recommended) status = "WARNING";
       }
-
       setResult({ dn: chosen.dn, velocity: chosen.velocity, headLoss: hf, pressureLoss: pLoss, status });
     } catch (err) {
-      // An toàn tối thiểu: KHÔNG để bất kỳ lỗi runtime chưa lường trước nào trong chuỗi tính toán làm
-      // crash cả trang (đúng hiện tượng "trang trắng" đã báo cáo — effect throw uncaught, không có
-      // Error Boundary nào bọc App). Vẫn log ra console để giữ nguyên khả năng debug root cause thật,
-      // không che giấu lỗi — chỉ ngăn nó phá UI. Đây không phải "sửa triệu chứng thay vì root cause":
-      // 2 root cause cụ thể (materialInfo không guard, manualVelocity không validate) đã được sửa ở trên;
-      // try/catch này là lớp phòng thủ cuối cho các trường hợp chưa lường hết được.
-      console.error("calculatePipeDesign lỗi runtime không lường trước:", err);
       setResult({ calcError: true, message: (err && err.message) || String(err) });
     }
   };
-
-  React.useEffect(() => { calculatePipeDesign(); /* eslint-disable-next-line */ }, [standard, waterSystem, building, material, velocityMode, flow, manualVelocity]);
-  // ==================== HẾT SHARED DESIGN STATE (MODULE 2) ====================
-
-  // STEP 9 FIX (Phần A2): chặn race condition giữa useEffect khởi động (đọc storage) và
-  // handleImport/handleReset. `useRef` cập nhật ĐỒNG BỘ ngay lập tức (không như setState),
-  // nên nếu người dùng import/reset TRONG LÚC useEffect khởi động vẫn đang chờ storage.get,
-  // khi promise đó resolve xong nó sẽ kiểm tra cờ này và tự huỷ, không ghi đè DB vừa import/reset.
+  React.useEffect(() => { calculatePipeDesign(); }, [standard, waterSystem, building, material, velocityMode, flow, manualVelocity]);
   const sessionOverrideRef = React.useRef(false);
-
-  // STEP B1/B2: khi mở app, ưu tiên nạp database cá nhân đã lưu (Priority 1),
-  // nếu không có / lỗi đọc thì im lặng giữ nguyên DEFAULT_DB đã là state khởi tạo (Priority 2 — fallback cuối).
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const result = await window.storage.get(IMPORTED_DB_STORAGE_KEY, false);
-        // STEP 9: nếu người dùng đã import hoặc reset thủ công trong lúc chờ đọc storage
-        // (sessionOverrideRef.current === true) -> bỏ qua kết quả storage cũ, KHÔNG ghi đè.
         if (cancelled || sessionOverrideRef.current || !result || !result.value) return;
         const parsed = JSON.parse(result.value);
-        // Kiểm tra tối thiểu để không nạp dữ liệu hỏng làm crash app — không phải validate lại toàn bộ,
-        // chỉ đảm bảo đúng hình dạng cơ bản trước khi setDb.
         const hasBasicShape = parsed && Array.isArray(parsed.pipeSizes) && Array.isArray(parsed.fixtures)
           && Array.isArray(parsed.velocity) && Array.isArray(parsed.fu2flow);
-        // STEP 24 FIX (PART 3/9): không được để 1 bản DB cá nhân CŨ (ít dữ liệu hơn) âm thầm ghi đè lên
-        // DEFAULT_DB MỚI đã publish (VD: bản cũ chỉ có 12 dòng Velocity Criteria — chưa có Hot Water —
-        // trong khi DEFAULT_DB hiện tại đã có 24). Đây chỉ là 1 phép so sánh SỐ LƯỢNG đơn giản (heuristic),
-        // không phải validate schema đầy đủ — nếu bản lưu trữ "ít hơn hoặc bằng" DEFAULT_DB hiện tại ở
-        // velocity, coi là có khả năng cũ/thiếu hơn và ưu tiên giữ DEFAULT_DB (đã là state khởi tạo sẵn),
-        // KHÔNG tự xoá storage của người dùng (không can thiệp dữ liệu họ không yêu cầu).
         const looksStaleOrIncomplete = hasBasicShape && parsed.velocity.length < DEFAULT_DB.velocity.length;
         if (hasBasicShape && !looksStaleOrIncomplete) {
-          // STEP 10: personal storage có thể còn giữ bản v3 cũ với lỗi "AS NSZ" (từ lần import trước
-          // khi Excel chưa được bạn sửa) -> migrate tối thiểu trước khi đưa vào runtime DB.
           const migrated = migrateStandardTypo(parsed);
           setDb(migrated);
           setUsingCustom(true);
-          // Nếu migration thực sự đổi gì đó (nghĩa là storage đang giữ bản có lỗi cũ) -> ghi lại bản
-          // đã migrate vào storage luôn, để các lần mở app sau không cần migrate lại từ đầu.
-          // Không chặn UI nếu ghi thất bại — đây chỉ là tối ưu, không phải yêu cầu bắt buộc.
           if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
             window.storage.set(IMPORTED_DB_STORAGE_KEY, JSON.stringify(migrated), false).catch(() => {});
           }
         }
       } catch (e) {
-        // Không có DB cá nhân nào được lưu trước đó, hoặc lỗi đọc storage
-        // -> KHÔNG crash, im lặng dùng DEFAULT_DB (đã là giá trị khởi tạo của state db).
       }
     })();
     return () => { cancelled = true; };
   }, []);
-
-  // Chỉ được gọi sau khi ImportBar đã validate Excel thành công.
   const handleImport = async newDb => {
-    // STEP 9: đánh dấu NGAY LẬP TỨC (đồng bộ, trước cả setDb) để nếu useEffect khởi động
-    // vẫn đang chờ đọc storage, nó sẽ tự huỷ khi resolve xong, không ghi đè DB vừa import này.
     sessionOverrideRef.current = true;
-    // STEP 10: migrate ngay cả với DB vừa import — phòng trường hợp bạn (hoặc ai khác) import lại
-    // đúng file v3 cũ có lỗi chính tả; đảm bảo runtime DB và storage từ nay luôn nhất quán "AS NZS".
-    // Với file v4 đã đúng sẵn, migration này là no-op (không đổi gì).
     const migrated = migrateStandardTypo(newDb);
     setDb(migrated);
     setUsingCustom(true);
@@ -2168,31 +1575,18 @@ function MainApp({ user, trialDaysLeft, onLogout }) {
       await window.storage.set(IMPORTED_DB_STORAGE_KEY, JSON.stringify(migrated), false);
       return { persisted: true };
     } catch (e) {
-      // Lưu thất bại: KHÔNG revert runtime DB, vẫn dùng được trong phiên hiện tại.
       return { persisted: false, error: (e && e.message) || String(e) };
     }
   };
-
   const handleReset = async () => {
-    // STEP 9: tương tự handleImport — chặn useEffect khởi động ghi đè lại DB cũ từ storage
-    // nếu nó vẫn đang chờ resolve trong lúc người dùng bấm Reset.
     sessionOverrideRef.current = true;
     setDb(DEFAULT_DB);
     setUsingCustom(false);
     try {
       await window.storage.delete(IMPORTED_DB_STORAGE_KEY, false);
     } catch (e) {
-      // Không có gì để xoá hoặc lỗi storage -> bỏ qua, không chặn thao tác reset của người dùng.
     }
   };
-
-  // STEP 18/27: Export Excel — gom đúng application state hiện tại (không đọc DOM), gọi hàm thuần
-  // exportDesignToExcel(). Cả 2 nút "Export to Excel" (Module1 và Module2) đều gọi hàm NÀY, nên luôn
-  // xuất đúng 1 design state dùng chung, không có bản snapshot riêng của từng Module.
-  // STEP 27: exportDesignToExcel giờ tự tính Design Flow + Pipe Result cho CẢ Cold Water lẫn Hot Water
-  // (không chỉ water system đang active) — không cần truyền totalFU/designFlow/velCriteria/result của
-  // riêng 1 water system nữa, chỉ cần fixtures/fixtureByKey/material/building/velocityMode/manualVelocity
-  // để hàm tự tính lại cho cả 2 phía bằng đúng công thức hiện có.
   const handleExportExcel = () => {
     if (!standard || !waterSystem) {
       window.alert("Vui lòng chọn Design Standard và Water System trước khi xuất Excel.");
@@ -2202,9 +1596,6 @@ function MainApp({ user, trialDaysLeft, onLogout }) {
       window.alert("Chưa có fixture nào trong Water Demand. Vui lòng thêm fixture trước khi xuất Excel.");
       return;
     }
-    // STEP 26 (PART 7): bọc bằng try/catch — nếu có lỗi runtime bất kỳ trong quá trình tạo/tải file,
-    // không được để crash Module 1/Module 2 hay mất design state đang có. Log lỗi thật ra console để
-    // debug được, chỉ hiển thị thông báo thân thiện cho người dùng (không lộ stack trace).
     try {
       exportDesignToExcel({
         db, standard, buildingType, systemType, waterSystem, flushingType,
@@ -2216,23 +1607,23 @@ function MainApp({ user, trialDaysLeft, onLogout }) {
       window.alert("Không thể xuất Excel. Vui lòng thử lại.");
     }
   };
-
   return (
     <ErrorBoundary>
     <div className="min-h-screen w-full" style={{
       background: "radial-gradient(circle at 15% 0%, #FBF3E4 0%, #F6EFDF 45%, #F2ECDC 100%)"
     }}>
-      {/* Thanh hiển thị thông tin User & Đăng xuất — giữ nguyên như bản deploy cũ */}
-      <div className="max-w-5xl mx-auto px-5 pt-6 flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 text-xs text-[#7D8B87] bg-white border border-[#EDE6D6] rounded-full px-3 py-1.5">
-          <User size={13} />
+      {/* Thêm thanh hiển thị thông tin User & Đăng xuất */}
+      <div className="max-w-5xl mx-auto px-5 pt-4 flex items-center justify-between">
+        <div className="flex items-center gap-2 bg-white/70 backdrop-blur border border-[#EDE6D6] px-3.5 py-1.5 rounded-full text-xs text-[#243B36]">
+          <User size={14} className="text-[#1F7A70]" />
           <span>{user.email}</span>
-          <span className="w-px h-3 bg-[#E7E0CE]" />
-          <span>Còn {trialDaysLeft} ngày dùng thử</span>
+          <span className="bg-[#FEF3DE] text-[#B8791A] font-semibold px-2 py-0.5 rounded-md ml-1">
+            Còn {trialDaysLeft} ngày dùng thử
+          </span>
         </div>
         <button
           onClick={onLogout}
-          className="flex items-center gap-1.5 text-xs font-medium text-[#C13A3A] bg-white border border-[#C13A3A]/25 hover:bg-[#FBE7E7] rounded-full px-3 py-1.5 transition"
+          className="flex items-center gap-1.5 text-xs font-medium text-[#C13A3A] bg-[#FBE7E7] hover:bg-[#F8D7D7] px-3 py-1.5 rounded-full transition"
         >
           <LogOut size={13} /> Đăng xuất
         </button>
@@ -2242,6 +1633,7 @@ function MainApp({ user, trialDaysLeft, onLogout }) {
         onImport={handleImport}
         onReset={handleReset}
       />
+      
       {screen === "m1"
         ? <Module1
             DB={db} onGoto={setScreen} onExportExcel={handleExportExcel}
@@ -2271,137 +1663,12 @@ function MainApp({ user, trialDaysLeft, onLogout }) {
             logActivity={logActivityToSupabase}
           />
       }
-      <StandardMappingModal
-        pending={pendingStandardChange}
-        onConfirm={confirmStandardMapping}
-        onCancel={cancelStandardMapping}
-      />
     </div>
     </ErrorBoundary>
   );
 }
-function AuthForm({ onLoginSuccess }) {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [infoMsg, setInfoMsg] = useState("");
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setErrorMsg("");
-    setInfoMsg("");
-    try {
-      if (!supabase) throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
-      if (isSignUp) {
-        const { data, error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
-        
-        // Tự động thu thập email người dùng đăng ký vào bảng 'profiles'
-        if (data?.user) {
-          try {
-             // FIX: bảng thật trên Supabase là "Profile" (viết hoa P), cột ID/Email (viết hoa) — không có cột created_at.
-            // Không set "Trial expires at" ở đây -> để trống -> checkUserTrial() tự fallback về mặc định TRIAL_DAYS ngày.
-            await supabase.from('Profile').insert([{ ID: data.user.id, Email: email }]);
-          } catch(errProfile) {
-             console.log("Lỗi tạo profile:", errProfile);
-          }
-        }
-        
-        setInfoMsg("Đăng ký thành công! Bạn có thể Đăng nhập ngay bây giờ.");
-      } else {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        onLoginSuccess(data.user);
-      }
-    } catch (err) {
-      setErrorMsg(err.message || "Đã xảy ra lỗi, vui lòng thử lại!");
-    } finally {
-      setLoading(false);
-    }
-  };
-  return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-[#EDE6D6] p-8 max-w-md w-full">
-        <div className="flex flex-col items-center mb-6 text-center">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#4FB3A6] to-[#1F7A70] flex items-center justify-center mb-3 text-white">
-            <Droplet size={24} />
-          </div>
-          <h2 className="text-xl font-bold text-[#1F3B36]">Pipe Design Assistant</h2>
-          <p className="text-xs text-[#7D8B87] mt-1">Đăng nhập tài khoản để sử dụng công cụ (Dùng thử miễn phí {TRIAL_DAYS} ngày)</p>
-        </div>
-        {errorMsg && (
-          <div className="mb-4 text-xs text-[#C13A3A] bg-[#FBE7E7] rounded-xl p-3 border border-[#C13A3A]/20">
-            {errorMsg}
-          </div>
-        )}
-        {infoMsg && (
-          <div className="mb-4 text-xs text-[#1E8A50] bg-[#E4F6EC] rounded-xl p-3 border border-[#1E8A50]/20">
-            {infoMsg}
-          </div>
-        )}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-[#7D8B87] mb-1">Email của bạn</label>
-            <input
-              type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@company.com"
-              className="w-full bg-[#FAF7EF] border border-[#E7E0CE] rounded-xl px-3.5 py-2.5 text-sm text-[#243B36] focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/40"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-[#7D8B87] mb-1">Mật khẩu</label>
-            <input
-              type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full bg-[#FAF7EF] border border-[#E7E0CE] rounded-xl px-3.5 py-2.5 text-sm text-[#243B36] focus:outline-none focus:ring-2 focus:ring-[#1F7A70]/40"
-            />
-          </div>
-          <button
-            type="submit" disabled={loading}
-            className="w-full mt-2 flex items-center justify-center gap-2 rounded-2xl py-3 font-semibold text-white text-sm bg-gradient-to-r from-[#4FB3A6] to-[#1F7A70] hover:brightness-105 transition shadow-md disabled:opacity-50"
-          >
-            {loading ? "Đang xử lý..." : isSignUp ? "Tạo tài khoản dùng thử" : "Đăng nhập"}
-          </button>
-        </form>
-        <div className="mt-6 text-center text-xs text-[#7D8B87]">
-          {isSignUp ? "Đã có tài khoản?" : "Chưa có tài khoản?"}{" "}
-          <button
-            onClick={() => { setIsSignUp(!isSignUp); setErrorMsg(""); setInfoMsg(""); }}
-            className="font-semibold text-[#1F7A70] hover:underline"
-          >
-            {isSignUp ? "Đăng nhập ngay" : "Đăng ký dùng thử miễn phí"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}function ExpiredTrialScreen({ user, onLogout }) {
-  return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-[#EDE6D6] p-8 max-w-md w-full text-center">
-        <div className="w-12 h-12 rounded-full bg-[#FEF3DE] flex items-center justify-center mx-auto mb-4 text-[#B8791A]">
-          <Lock size={24} />
-        </div>
-        <h2 className="text-xl font-bold text-[#1F3B36]">Đã hết thời gian dùng thử!</h2>
-        <p className="text-xs text-[#7D8B87] mt-2 leading-relaxed">
-          Tài khoản <strong className="text-[#243B36]">{user.email}</strong> của bạn đã hết thời hạn {TRIAL_DAYS} ngày dùng thử miễn phí.
-        </p>
-        <div className="my-6 p-4 bg-[#FAF7EF] rounded-2xl border border-[#E7E0CE] text-left">
-          <p className="text-xs text-[#243B36] font-medium mb-1">Để nâng cấp bản quyền Pro:</p>
-          <p className="text-xs text-[#7D8B87]">Vui lòng liên hệ Admin qua Email hoặc Zalo để kích hoạt tài khoản vĩnh viễn.</p>
-        </div>
-        <button
-          onClick={onLogout}
-          className="w-full flex items-center justify-center gap-2 rounded-2xl py-2.5 font-medium text-[#7D8B87] border border-[#E7E0CE] hover:bg-[#FAF7EF] transition text-sm"
-        >
-          <LogOut size={15} /> Đăng xuất
-        </button>
-      </div>
-    </div>
-  );
-}export default function App() {
+// ==== THAY ĐỔI: APP GỐC LÀ NGƯỜI QUẢN LÝ PHIÊN AUTH ====
+export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [trialDaysLeft, setTrialDaysLeft] = useState(0);
